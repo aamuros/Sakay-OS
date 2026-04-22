@@ -282,6 +282,64 @@ function snapshotWaitByJeepney(state: MutableSimulationState) {
   );
 }
 
+function countQueuedWaitTicks(state: MutableSimulationState) {
+  return state.readyQueue.reduce((total, jeepneyId) => {
+    return total + state.jeepneyStates[jeepneyId].currentWaitTicks;
+  }, 0);
+}
+
+function computeAverageQueuedWait(state: MutableSimulationState) {
+  if (state.readyQueue.length === 0) {
+    return 0;
+  }
+
+  return countQueuedWaitTicks(state) / state.readyQueue.length;
+}
+
+function summarizeBunching(
+  route: Route,
+  state: MutableSimulationState,
+  activeJeepneyId: string,
+  activeStopIndex: number
+) {
+  const occupancyByStopId = Object.fromEntries(
+    route.stops.map((stop) => [stop.id, 0])
+  );
+
+  Object.values(state.jeepneyStates).forEach((jeepneyState) => {
+    const displayedStopIndex =
+      jeepneyState.id === activeJeepneyId
+        ? activeStopIndex
+        : jeepneyState.nextStopIndex;
+    const stopId = route.stops[displayedStopIndex].id;
+
+    occupancyByStopId[stopId] += 1;
+  });
+
+  let bunchingScore = 0;
+  let maxBunchSize = 0;
+
+  const bunchedStopIds = route.stops
+    .filter((stop) => {
+      const occupancy = occupancyByStopId[stop.id];
+
+      if (occupancy < 2) {
+        return false;
+      }
+
+      bunchingScore += occupancy - 1;
+      maxBunchSize = Math.max(maxBunchSize, occupancy);
+      return true;
+    })
+    .map((stop) => stop.id);
+
+  return {
+    bunchingScore,
+    bunchedStopIds,
+    maxBunchSize
+  };
+}
+
 export function runJeepneySimulation(
   config: JeepneySimulationConfig
 ): JeepneySimulationResult {
@@ -351,6 +409,12 @@ export function runJeepneySimulation(
     const atRiskJeepneyIds = listStarvationRiskIds(config, state);
     const passengerBacklog = countPassengerBacklog(state);
     const busiestStopId = findBusiestStopId(config.route, state.passengerQueues);
+    const bunching = summarizeBunching(
+      config.route,
+      state,
+      state.activeJeepneyId,
+      stopIndex
+    );
 
     state.events.push({
       tick,
@@ -372,12 +436,15 @@ export function runJeepneySimulation(
       activeJeepneyId: state.activeJeepneyId,
       throughput: state.throughput,
       totalWaitTime: state.totalWaitTime,
-      averageWaitTime: state.totalWaitTime / config.jeepneys.length,
+      averageWaitTime: computeAverageQueuedWait(state),
       contextSwitches: state.contextSwitches,
       starvationRisk: atRiskJeepneyIds.length,
       queue: [...state.readyQueue],
       atRiskJeepneyIds,
       waitByJeepneyId: snapshotWaitByJeepney(state),
+      bunchingScore: bunching.bunchingScore,
+      bunchedStopIds: bunching.bunchedStopIds,
+      maxBunchSize: bunching.maxBunchSize,
       passengerBacklog,
       stopPassengerQueues: { ...state.passengerQueues },
       busiestStopId,

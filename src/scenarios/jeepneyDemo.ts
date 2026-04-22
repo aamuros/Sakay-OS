@@ -62,115 +62,54 @@ export const jeepneyDemoConfig: JeepneySimulationConfig = {
 };
 
 export const jeepneyRoutePath =
-  "M458 54 C440 66 424 76 410 88 S374 118 348 136 S330 190 318 210 S296 264 286 288";
+  "M492 56 C478 76 466 92 454 110 C442 136 434 154 428 168 C418 190 412 206 410 226 C408 240 410 252 420 258 C396 268 360 276 288 286";
 
 export const jeepneyRouteLayout: RouteStopLayout[] = [
-  { stopId: "prc-terminal", x: 458, y: 54, labelDx: 0, labelDy: -28 },
-  { stopId: "ap-reyes", x: 410, y: 88, labelDx: 62, labelDy: -4 },
-  { stopId: "pablo-ocampo", x: 348, y: 136, labelDx: -76, labelDy: -18 },
-  { stopId: "yakal", x: 318, y: 210, labelDx: 64, labelDy: -2 },
-  { stopId: "gil-puyat", x: 286, y: 288, labelDx: 66, labelDy: 10 }
+  { stopId: "prc-terminal", x: 492, y: 56, labelDx: 0, labelDy: -28 },
+  { stopId: "ap-reyes", x: 454, y: 110, labelDx: 68, labelDy: -2 },
+  { stopId: "pablo-ocampo", x: 428, y: 168, labelDx: -94, labelDy: -10 },
+  { stopId: "yakal", x: 410, y: 226, labelDx: 58, labelDy: -4 },
+  { stopId: "gil-puyat", x: 288, y: 286, labelDx: 56, labelDy: -10 }
 ];
 
 export const makatiRoads: MakatiRoad[] = [
   {
-    id: "jp-rizal",
-    name: "J.P. Rizal St",
-    path: "M178 38 C272 28 394 30 562 46",
-    labelX: 438,
-    labelY: 26,
-    tone: "primary"
-  },
-  {
     id: "ap-reyes",
     name: "A.P. Reyes Ave",
-    path: "M520 30 C480 46 438 62 390 92",
-    labelX: 482,
-    labelY: 74,
+    path: "M532 58 C502 74 478 90 454 110",
+    labelX: 496,
+    labelY: 84,
     tone: "primary"
   },
   {
     id: "pablo-ocampo",
     name: "Pablo Ocampo St",
-    path: "M74 132 C188 128 306 130 544 146",
-    labelX: 170,
-    labelY: 120,
+    path: "M118 160 C236 156 342 160 534 170",
+    labelX: 202,
+    labelY: 148,
     tone: "primary"
   },
   {
     id: "chino-roces",
     name: "Chino Roces Ave",
-    path: "M382 18 C370 70 358 128 342 202 S308 300 292 344",
-    labelX: 366,
-    labelY: 232,
+    path: "M486 34 C470 82 454 126 440 176 C428 218 420 248 414 270",
+    labelX: 472,
+    labelY: 206,
     tone: "primary"
-  },
-  {
-    id: "kamagong",
-    name: "Kamagong St",
-    path: "M166 182 C258 176 354 176 506 184",
-    labelX: 520,
-    labelY: 174,
-    tone: "secondary"
-  },
-  {
-    id: "yakal",
-    name: "Yakal St",
-    path: "M176 214 C268 206 364 206 530 214",
-    labelX: 542,
-    labelY: 204,
-    tone: "secondary"
-  },
-  {
-    id: "metropolitan",
-    name: "Metropolitan Ave",
-    path: "M146 246 C244 236 372 238 594 248",
-    labelX: 560,
-    labelY: 236,
-    tone: "secondary"
   },
   {
     id: "gil-puyat",
     name: "Sen. Gil Puyat Ave",
-    path: "M52 284 C176 284 312 286 640 302",
-    labelX: 154,
-    labelY: 272,
+    path: "M84 286 C188 286 302 284 548 278",
+    labelX: 182,
+    labelY: 274,
     tone: "primary"
-  },
-  {
-    id: "don-bosco",
-    name: "Don Bosco St",
-    path: "M446 122 C448 170 452 228 460 334",
-    labelX: 470,
-    labelY: 314,
-    tone: "local"
-  },
-  {
-    id: "pasong-tamo-ext",
-    name: "South Ave",
-    path: "M514 82 C578 92 630 102 688 118",
-    labelX: 628,
-    labelY: 102,
-    tone: "local"
-  },
-  {
-    id: "dela-rosa",
-    name: "Dela Rosa Access",
-    path: "M548 156 C556 206 562 252 566 326",
-    labelX: 584,
-    labelY: 312,
-    tone: "secondary"
   }
 ];
 
 export const makatiMapLabels: MapLabel[] = [
-  { id: "tejeros", name: "Tejeros", x: 548, y: 78, kind: "district" },
-  { id: "santa-cruz", name: "Santa Cruz", x: 222, y: 106, kind: "district" },
-  { id: "san-antonio", name: "San Antonio", x: 250, y: 248, kind: "district" },
-  { id: "circuit", name: "Circuit Makati", x: 576, y: 52, kind: "landmark" },
-  { id: "shopwise", name: "Shopwise", x: 264, y: 150, kind: "landmark" },
-  { id: "mapua", name: "Mapua Makati", x: 460, y: 122, kind: "landmark" },
-  { id: "mcs", name: "Makati Central Square", x: 470, y: 238, kind: "landmark" }
+  { id: "olympia", name: "Olympia", x: 584, y: 116, kind: "district" },
+  { id: "palanan", name: "Palanan", x: 244, y: 316, kind: "district" }
 ];
 
 export const jeepneyTrafficSegments: TrafficSegment[] = [
@@ -178,36 +117,36 @@ export const jeepneyTrafficSegments: TrafficSegment[] = [
     id: "prc-ap-reyes",
     fromStopId: "prc-terminal",
     toStopId: "ap-reyes",
-    path: "M458 54 C440 66 424 76 410 88",
+    path: "M492 56 C478 76 466 92 454 110",
     label: "terminal release",
-    labelX: 472,
-    labelY: 92
+    labelX: 486,
+    labelY: 96
   },
   {
     id: "ap-reyes-p-ocampo",
     fromStopId: "ap-reyes",
     toStopId: "pablo-ocampo",
-    path: "M410 88 C384 106 368 120 348 136",
+    path: "M454 110 C442 136 434 154 428 168",
     label: "P. Ocampo merge",
-    labelX: 362,
-    labelY: 102
+    labelX: 446,
+    labelY: 144
   },
   {
     id: "p-ocampo-yakal",
     fromStopId: "pablo-ocampo",
     toStopId: "yakal",
-    path: "M348 136 C334 156 326 182 318 210",
+    path: "M428 168 C418 190 412 206 410 226",
     label: "Chino Roces flow",
-    labelX: 276,
-    labelY: 172
+    labelX: 388,
+    labelY: 202
   },
   {
     id: "yakal-buendia",
     fromStopId: "yakal",
     toStopId: "gil-puyat",
-    path: "M318 210 C302 236 292 264 286 288",
+    path: "M410 226 C408 240 410 252 420 258 C396 268 360 276 288 286",
     label: "Buendia approach",
-    labelX: 222,
-    labelY: 250
+    labelX: 344,
+    labelY: 278
   }
 ];

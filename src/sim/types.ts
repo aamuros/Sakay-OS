@@ -48,6 +48,9 @@ export type MetricsSnapshot = {
   queue: string[];
   atRiskJeepneyIds: string[];
   waitByJeepneyId: Record<string, number>;
+  bunchingScore: number;
+  bunchedStopIds: string[];
+  maxBunchSize: number;
   passengerBacklog: number;
   stopPassengerQueues: Record<string, number>;
   busiestStopId: string | null;

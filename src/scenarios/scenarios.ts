@@ -7,10 +7,10 @@ export const scenarios: ScenarioDefinition[] = [
   {
     id: "jeepney-bunching",
     name: "Jeepney Bunching",
-    concept: "Time-sliced scheduling and starvation prevention",
+    concept: "Time-Sliced Scheduling and Starvation Prevention",
     algorithm: "Round Robin + Aging",
     description:
-      "Model the PRC-to-Buendia Makati corridor across A.P. Reyes, Pablo Ocampo, and Chino Roces, then use time quantum scheduling and aging to show how bunching pressure builds and gets corrected.",
+      "Follow the PRC-to-Buendia corridor and watch Round Robin time slices rotate jeepneys while aging prevents one unit from waiting too long.",
     status: "active",
     Stage: JeepneyStage
   },
@@ -21,7 +21,7 @@ export const scenarios: ScenarioDefinition[] = [
     algorithm: "Priority + Load Balancing",
     description:
       "Model corridor pressure across EDSA, C5, and Quirino, then show how priority classes, optional preemption, and rerouting react to overload.",
-    status: "active",
+    status: "in-progress",
     Stage: EdsaOverloadStage
   },
   {
@@ -31,7 +31,7 @@ export const scenarios: ScenarioDefinition[] = [
     algorithm: "Fault Tolerant Scheduling",
     description:
       "Planned last because migration and recovery add the most complexity.",
-    status: "planned",
+    status: "in-progress",
     Stage: MrtBreakdownStage
   }
 ];

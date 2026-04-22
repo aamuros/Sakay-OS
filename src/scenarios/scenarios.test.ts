@@ -11,6 +11,19 @@ describe("scenario scaffold", () => {
     });
   });
 
+  it("marks the non-jeepney scenarios as in progress", () => {
+    expect(scenarios.slice(1)).toEqual([
+      expect.objectContaining({
+        id: "edsa-overload",
+        status: "in-progress"
+      }),
+      expect.objectContaining({
+        id: "mrt-breakdown",
+        status: "in-progress"
+      })
+    ]);
+  });
+
   it("registers pluggable stage components for every scenario", () => {
     expect(scenarios.map((scenario) => scenario.id)).toEqual([
       "jeepney-bunching",

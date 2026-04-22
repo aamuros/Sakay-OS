@@ -25,15 +25,9 @@ type LearningControls = {
 };
 
 type MarkerPosition = JeepneyPlaybackState & {
-  left: string;
-  top: string;
+  mapX: number;
+  mapY: number;
   stopName: string;
-};
-
-type ConceptCard = {
-  title: string;
-  tag: string;
-  body: string;
 };
 
 type TrafficLevel = "light" | "moderate" | "heavy" | "severe";
@@ -42,20 +36,17 @@ type SegmentState = TrafficSegment & {
   level: TrafficLevel;
 };
 
-const routeStops = jeepneyDemoConfig.route.stops.map((stop) => {
-  const layout = jeepneyRouteLayout.find(
-    (routeStop) => routeStop.stopId === stop.id
-  );
+type QueueEntry = {
+  jeepney: MarkerPosition;
+  waitTicks: number;
+  isAtRisk: boolean;
+};
 
-  if (!layout) {
-    throw new Error(`Missing route layout for stop ${stop.id}.`);
-  }
-
-  return {
-    ...stop,
-    ...layout
-  };
-});
+const routeStops = jeepneyDemoConfig.route.stops;
+const visibleRoadLabelIds = new Set(["chino-roces", "gil-puyat"]);
+const routeLayoutByStopId = new Map(
+  jeepneyRouteLayout.map((layout) => [layout.stopId, layout])
+);
 
 const defaultControls: LearningControls = {
   timeQuantum: jeepneyDemoConfig.timeQuantum,
@@ -64,30 +55,20 @@ const defaultControls: LearningControls = {
   passengerArrivalRate: jeepneyDemoConfig.passengerArrivalRate ?? 2
 };
 
-const markerOffsets = [
-  { x: 0, y: -28 },
-  { x: 24, y: 0 },
-  { x: 0, y: 28 },
-  { x: -24, y: 0 },
-  { x: 18, y: -18 },
-  { x: -18, y: 18 }
-];
-const routeWidth = 720;
-const routeHeight = 360;
 const tickDurationMs = 900;
 
 function formatReason(reason: JeepneyPlaybackFrame["reason"]) {
   switch (reason) {
     case "dispatch":
-      return "Fresh dispatch";
+      return "New time slice";
     case "continue-quantum":
-      return "Quantum continues";
+      return "Time slice continues";
     case "quantum-expired":
-      return "Quantum expired";
+      return "Time slice ended";
     case "aging-boost":
-      return "Priority aging fired";
+      return "Aging prevented starvation";
     default:
-      return "Ready to dispatch";
+      return "Waiting for first dispatch";
   }
 }
 
@@ -145,12 +126,6 @@ function formatMetricValue(value: number) {
   }
 
   return value.toFixed(1);
-}
-
-function getJeepneyLabel(config: JeepneySimulationConfig, jeepneyId: string) {
-  return (
-    config.jeepneys.find((jeepney) => jeepney.id === jeepneyId)?.label ?? jeepneyId
-  );
 }
 
 function getStopName(stopId: string | null) {
@@ -245,142 +220,59 @@ function formatTrafficLevel(level: TrafficLevel) {
   }
 }
 
+function formatQueuePreview(labels: string[]) {
+  if (labels.length === 0) {
+    return "No jeepneys are waiting for the next turn.";
+  }
+
+  if (labels.length <= 3) {
+    return labels.join(" -> ");
+  }
+
+  return `${labels.slice(0, 3).join(" -> ")} +${labels.length - 3} more`;
+}
+
+function buildVisibleStopBadgeIds(
+  metric: MetricsSnapshot | null,
+  activeStopId: string | null
+) {
+  const visibleStopIds = new Set<string>();
+
+  if (!metric) {
+    return visibleStopIds;
+  }
+
+  if (metric.busiestStopId && getStopBacklog(metric, metric.busiestStopId) > 0) {
+    visibleStopIds.add(metric.busiestStopId);
+  }
+
+  if (activeStopId && getStopBacklog(metric, activeStopId) > 0) {
+    visibleStopIds.add(activeStopId);
+  }
+
+  return visibleStopIds;
+}
+
 function buildMarkerPositions(frame: JeepneyPlaybackFrame): MarkerPosition[] {
   return frame.jeepneys.map((jeepney) => {
     const stop = routeStops[jeepney.stopIndex];
+    const stopLayout = routeLayoutByStopId.get(stop.id);
     const stopGroup = frame.jeepneys
       .filter((candidate) => candidate.stopIndex === jeepney.stopIndex)
       .sort(compareJeepneys);
     const markerIndex = stopGroup.findIndex(
       (candidate) => candidate.id === jeepney.id
     );
-    const offset = markerOffsets[markerIndex] ?? { x: 0, y: 0 };
+    const row = Math.floor(markerIndex / 2);
+    const sideOffset = markerIndex % 2 === 0 ? 22 : -22;
 
     return {
       ...jeepney,
-      left: `${((stop.x + offset.x) / routeWidth) * 100}%`,
-      top: `${((stop.y + offset.y) / routeHeight) * 100}%`,
+      mapX: (stopLayout?.x ?? 0) + sideOffset,
+      mapY: (stopLayout?.y ?? 0) - (26 + row * 18),
       stopName: stop.name
     };
   });
-}
-
-function describeTimeQuantum(
-  config: JeepneySimulationConfig,
-  frame: JeepneyPlaybackFrame,
-  activeLabel: string | null
-) {
-  if (!activeLabel) {
-    return `Slice length set to ${config.timeQuantum} ticks. Start sim to see lane ownership.`;
-  }
-
-  if (frame.reason === "quantum-expired") {
-    return `${activeLabel} used all ${config.timeQuantum} ticks, then moved to queue tail.`;
-  }
-
-  return `${activeLabel} using ${frame.quantumUsed}/${config.timeQuantum} ticks in current slice.`;
-}
-
-function describeContextSwitch(
-  contextSwitches: number,
-  previousLabel: string | null,
-  activeLabel: string | null,
-  didContextSwitch: boolean
-) {
-  if (!activeLabel) {
-    return "Context switch card waits for first handoff.";
-  }
-
-  if (didContextSwitch && previousLabel) {
-    return `${previousLabel} handed service lane to ${activeLabel}. Total switches: ${contextSwitches}.`;
-  }
-
-  return `${activeLabel} kept lane this tick. Total switches: ${contextSwitches}.`;
-}
-
-function describeStarvation(
-  config: JeepneySimulationConfig,
-  metric: MetricsSnapshot | null,
-  currentFrame: JeepneyPlaybackFrame
-) {
-  if (!metric) {
-    return `Starvation threshold armed at ${config.agingThreshold} wait ticks.`;
-  }
-
-  if (metric.atRiskJeepneyIds.length === 0) {
-    return `No jeepney waiting at or past ${config.agingThreshold} ticks right now.`;
-  }
-
-  const riskList = metric.atRiskJeepneyIds
-    .map((jeepneyId) => {
-      const waitTicks = metric.waitByJeepneyId[jeepneyId] ?? 0;
-
-      return `${jeepneyId.toUpperCase()} (${waitTicks}t)`;
-    })
-    .join(", ");
-
-  if (currentFrame.reason === "aging-boost") {
-    return `Risk visible now: ${riskList}. Scheduler promoted longest-waiting jeepney.`;
-  }
-
-  return `Risk visible now: ${riskList}. Aging ready if delay grows more.`;
-}
-
-function describePriorityAging(
-  config: JeepneySimulationConfig,
-  frame: JeepneyPlaybackFrame,
-  activeLabel: string | null,
-  activeWaitTicks: number
-) {
-  if (frame.reason === "aging-boost" && activeLabel) {
-    return `${activeLabel} jumped queue after ${activeWaitTicks} wait ticks. Threshold: ${config.agingThreshold}.`;
-  }
-
-  return `Aging threshold set to ${config.agingThreshold} ticks. Longest waiter jumps queue once that mark is met.`;
-}
-
-function buildConceptCards(
-  config: JeepneySimulationConfig,
-  frame: JeepneyPlaybackFrame,
-  metric: MetricsSnapshot | null,
-  previousFrame: JeepneyPlaybackFrame | null,
-  activeWaitTicks: number,
-  didContextSwitch: boolean
-): ConceptCard[] {
-  const activeLabel = frame.activeJeepneyId
-    ? getJeepneyLabel(config, frame.activeJeepneyId)
-    : null;
-  const previousLabel = previousFrame?.activeJeepneyId
-    ? getJeepneyLabel(config, previousFrame.activeJeepneyId)
-    : null;
-
-  return [
-    {
-      title: "Time Quantum",
-      tag: "CPU slice -> service lane",
-      body: describeTimeQuantum(config, frame, activeLabel)
-    },
-    {
-      title: "Context Switch",
-      tag: "Handoff event",
-      body: describeContextSwitch(
-        metric?.contextSwitches ?? 0,
-        previousLabel,
-        activeLabel,
-        didContextSwitch
-      )
-    },
-    {
-      title: "Starvation",
-      tag: "Wait threshold watch",
-      body: describeStarvation(config, metric, frame)
-    },
-    {
-      title: "Priority Aging",
-      tag: "Fairness correction",
-      body: describePriorityAging(config, frame, activeLabel, activeWaitTicks)
-    }
-  ];
 }
 
 function getGanttCellClass(
@@ -403,7 +295,7 @@ function getGanttCellClass(
   return "gantt-cell";
 }
 
-export function JeepneyStage({ scenario }: ScenarioStageProps) {
+export function JeepneyStage(_props: ScenarioStageProps) {
   const [frameIndex, setFrameIndex] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
   const [controls, setControls] = useState(defaultControls);
@@ -419,8 +311,6 @@ export function JeepneyStage({ scenario }: ScenarioStageProps) {
   const currentFrame = playbackFrames[safeFrameIndex];
   const currentMetric =
     currentFrame.tick >= 0 ? simulationResult.metrics[currentFrame.tick] : null;
-  const previousFrame =
-    safeFrameIndex > 0 ? playbackFrames[safeFrameIndex - 1] : null;
   const currentEvent =
     currentFrame.tick >= 0 ? simulationResult.events[currentFrame.tick] : null;
   const markerPositions = buildMarkerPositions(currentFrame);
@@ -429,22 +319,106 @@ export function JeepneyStage({ scenario }: ScenarioStageProps) {
         (jeepney) => jeepney.id === currentFrame.activeJeepneyId
       ) ?? null
     : null;
+  const activeStopId =
+    currentEvent?.stopId ??
+    (activeJeepney ? routeStops[activeJeepney.stopIndex]?.id ?? null : null);
   const progressPercent =
     playbackFrames.length > 1
       ? (safeFrameIndex / (playbackFrames.length - 1)) * 100
       : 0;
   const totalTicks = Math.max(playbackFrames.length - 2, 0);
-  const conceptCards = buildConceptCards(
-    simulationConfig,
-    currentFrame,
-    currentMetric,
-    previousFrame,
-    currentEvent?.activeWaitTicks ?? 0,
-    currentEvent?.didContextSwitch ?? false
-  );
   const busiestStopName = getStopName(currentMetric?.busiestStopId ?? null);
+  const busiestStopBacklog = currentMetric?.busiestStopId
+    ? getStopBacklog(currentMetric, currentMetric.busiestStopId)
+    : 0;
   const segmentStates = buildSegmentStates(currentMetric);
   const corridorTrafficLevel = getCorridorTrafficLevel(segmentStates);
+  const visibleStopBadgeIds = buildVisibleStopBadgeIds(currentMetric, activeStopId);
+  const waitingJeepneyCount = currentFrame.queue.length;
+  const queueEntries: QueueEntry[] = currentFrame.queue
+    .map((jeepneyId) => {
+      const jeepney = markerPositions.find((candidate) => candidate.id === jeepneyId);
+
+      if (!jeepney) {
+        return null;
+      }
+
+      return {
+        jeepney,
+        waitTicks: currentMetric?.waitByJeepneyId[jeepneyId] ?? 0,
+        isAtRisk: currentMetric?.atRiskJeepneyIds.includes(jeepneyId) ?? false
+      };
+    })
+    .filter((entry): entry is QueueEntry => entry !== null);
+  const queuePreview = queueEntries.map((entry) => entry.jeepney.label);
+  const firstAtRiskEntry = queueEntries.find((entry) => entry.isAtRisk) ?? null;
+  const agingTriggered = currentFrame.reason === "aging-boost" && activeJeepney !== null;
+  const activeStatusCopy = activeJeepney
+    ? `${activeJeepney.label} at ${activeJeepney.stopName}. ${currentEvent?.servedPassengers ?? 0} boarded this tick.`
+    : "Press Start to begin the corridor run.";
+  const starvationValue = agingTriggered
+    ? `Aging dispatched ${activeJeepney?.label ?? "a jeepney"}`
+    : (currentMetric?.starvationRisk ?? 0) > 0
+      ? `${currentMetric?.starvationRisk ?? 0} unit${(currentMetric?.starvationRisk ?? 0) === 1 ? "" : "s"} near limit`
+      : "No aging needed";
+  const starvationDetail = agingTriggered
+    ? `${activeJeepney?.label ?? "A jeepney"} moved forward after waiting ${currentEvent?.activeWaitTicks ?? 0} ticks.`
+    : firstAtRiskEntry
+      ? `${firstAtRiskEntry.jeepney.label} has waited ${firstAtRiskEntry.waitTicks}/${simulationConfig.agingThreshold} ticks.`
+      : `Aging steps in after ${simulationConfig.agingThreshold} wait ticks.`;
+  const lessonMetrics = [
+    {
+      label: "Active time slice",
+      value: activeJeepney
+        ? `${activeJeepney.label} ${currentEvent?.quantumUsed ?? 0}/${simulationConfig.timeQuantum}`
+        : "Ready to start",
+      detail: activeJeepney
+        ? `${activeJeepney.stopName} is using the lane now.`
+        : "Press Start to begin the first time slice."
+    },
+    {
+      label: "Ready queue",
+      value: waitingJeepneyCount === 0 ? "Clear" : `${waitingJeepneyCount} waiting`,
+      detail:
+        waitingJeepneyCount === 0
+          ? "No jeepneys are waiting for the next turn."
+          : formatQueuePreview(queuePreview)
+    },
+    {
+      label: "Starvation prevention",
+      value: starvationValue,
+      detail: starvationDetail
+    },
+    {
+      label: "Passenger pressure",
+      value: busiestStopName ?? "Balanced",
+      detail: busiestStopName
+        ? `${busiestStopBacklog} riders are waiting at the busiest stop.`
+        : `Traffic is ${formatTrafficLevel(corridorTrafficLevel)} across the corridor.`
+    }
+  ];
+  const queueMetricItems = [
+    {
+      label: "Avg wait",
+      value: `${formatMetricValue(currentMetric?.averageWaitTime ?? 0)} ticks`
+    },
+    {
+      label: "Switches",
+      value: `${currentMetric?.contextSwitches ?? 0}`
+    },
+    {
+      label: "Aging watch",
+      value: `${currentMetric?.starvationRisk ?? 0} unit${(currentMetric?.starvationRisk ?? 0) === 1 ? "" : "s"}`
+    }
+  ];
+  const queueCardCopy = activeJeepney
+    ? `${activeJeepney.stopName} · ${currentEvent?.quantumUsed ?? 0}/${simulationConfig.timeQuantum} · ${currentEvent?.servedPassengers ?? 0} boarded`
+    : "Press Start to begin the rotation.";
+  const starvationPanelCopy = agingTriggered
+    ? `${activeJeepney?.label ?? "A jeepney"} skipped ahead after waiting ${currentEvent?.activeWaitTicks ?? 0} ticks.`
+    : firstAtRiskEntry
+      ? `${firstAtRiskEntry.jeepney.label} is nearing the ${simulationConfig.agingThreshold}-tick aging limit.`
+      : `No jeepney is near the aging limit. Trigger at ${simulationConfig.agingThreshold} ticks.`;
 
   useEffect(() => {
     if (!isRunning || safeFrameIndex >= playbackFrames.length - 1) {
@@ -532,429 +506,395 @@ export function JeepneyStage({ scenario }: ScenarioStageProps) {
         </div>
       </div>
 
-      <section className="learning-controls" aria-label="Learning controls">
-        <div className="panel-section-header">
-          <div>
-            <p className="eyebrow">Phase 3 tuning</p>
-            <h3>Live controls</h3>
-          </div>
-          <p>
-            Each slider rebuilds the same Makati corridor with new scheduling
-            rules.
-          </p>
-        </div>
-
-        <div className="learning-control-grid">
-          <label className="learning-control">
-            <span>Time quantum</span>
-            <strong>{controls.timeQuantum} ticks</strong>
-            <input
-              max={4}
-              min={1}
-              onChange={(event) => {
-                const timeQuantum = Number(event.target.value);
-
-                setControls((current) => ({
-                  ...current,
-                  timeQuantum,
-                  agingThreshold: Math.max(current.agingThreshold, timeQuantum + 1)
-                }));
-              }}
-              type="range"
-              value={controls.timeQuantum}
-            />
-          </label>
-
-          <label className="learning-control">
-            <span>Aging threshold</span>
-            <strong>{controls.agingThreshold} wait ticks</strong>
-            <input
-              max={10}
-              min={2}
-              onChange={(event) => {
-                setControls((current) => ({
-                  ...current,
-                  agingThreshold: Number(event.target.value)
-                }));
-              }}
-              type="range"
-              value={controls.agingThreshold}
-            />
-          </label>
-
-          <label className="learning-control">
-            <span>Jeepney count</span>
-            <strong>{controls.jeepneyCount} active units</strong>
-            <input
-              max={6}
-              min={2}
-              onChange={(event) => {
-                setControls((current) => ({
-                  ...current,
-                  jeepneyCount: Number(event.target.value)
-                }));
-              }}
-              type="range"
-              value={controls.jeepneyCount}
-            />
-          </label>
-
-          <label className="learning-control">
-            <span>Passenger arrival rate</span>
-            <strong>{controls.passengerArrivalRate} riders per stop</strong>
-            <input
-              max={5}
-              min={0}
-              onChange={(event) => {
-                setControls((current) => ({
-                  ...current,
-                  passengerArrivalRate: Number(event.target.value)
-                }));
-              }}
-              type="range"
-              value={controls.passengerArrivalRate}
-            />
-          </label>
-        </div>
-      </section>
-
-      <div className="live-grid">
-        <div
-          className="route-preview"
-          aria-label="Google Maps inspired Makati jeepney corridor preview"
-        >
-          <div className="map-toolbar">
-            <div className="map-search-shell" aria-hidden="true">
-              <span className="map-search-pin is-origin" />
-              <div className="map-search-copy">
-                <strong>PRC Terminal</strong>
-                <span>to Gil Puyat (Buendia)</span>
-              </div>
-            </div>
-
-            <div className="map-status-cluster">
-              <span className="map-mode-pill">PUJ</span>
-              <span className={`traffic-pill is-${corridorTrafficLevel}`}>
-                Traffic {formatTrafficLevel(corridorTrafficLevel)}
-              </span>
-            </div>
-          </div>
-
-          <div className="route-canvas">
-            <div className="map-surface-tag">Makati corridor</div>
-
-            <svg viewBox="0 0 720 360" role="img" aria-labelledby="route-title">
-              <title id="route-title">
-                Makati jeepney route from PRC terminal to Gil Puyat with active and waiting vehicles
-              </title>
-              {makatiRoads.map((road) => (
-                <g key={road.id}>
-                  <path className={`map-road-casing is-${road.tone}`} d={road.path} />
-                  <path className={`map-road is-${road.tone}`} d={road.path} />
-                  <text
-                    className={`map-road-label is-${road.tone}`}
-                    x={road.labelX}
-                    y={road.labelY}
-                  >
-                    {road.name}
-                  </text>
-                </g>
-              ))}
-
-              {makatiMapLabels.map((label) => (
-                <text
-                  className={`map-area-label is-${label.kind}`}
-                  key={label.id}
-                  x={label.x}
-                  y={label.y}
-                >
-                  {label.name}
-                </text>
-              ))}
-
-              <path className="route-line-shadow" d={jeepneyRoutePath} />
-              <path className="route-line" d={jeepneyRoutePath} />
-              {segmentStates.map((segment) => (
-                <g key={segment.id}>
-                  <path className="traffic-segment-shadow" d={segment.path} />
-                  <path className={`traffic-segment is-${segment.level}`} d={segment.path} />
-                  <text
-                    className={`traffic-label is-${segment.level}`}
-                    x={segment.labelX}
-                    y={segment.labelY}
-                  >
-                    {segment.label}
-                  </text>
-                </g>
-              ))}
-
-              {routeStops.map((stop) => (
-                <g key={stop.id}>
-                  <circle className="stop-ring" cx={stop.x} cy={stop.y} r="12" />
-                  <circle className="stop-core" cx={stop.x} cy={stop.y} r="5" />
-                  <text
-                    className="stop-label"
-                    x={stop.x + (stop.labelDx ?? 0)}
-                    y={stop.y + (stop.labelDy ?? -22)}
-                  >
-                    {stop.name}
-                  </text>
-                </g>
-              ))}
-            </svg>
-
-            <div className="stop-load-layer" aria-hidden="true">
-              {routeStops.map((stop) => {
-                const backlog =
-                  currentMetric?.stopPassengerQueues[stop.id] ?? 0;
-
-                return (
-                  <div
-                    className={`stop-load ${
-                      currentMetric?.busiestStopId === stop.id ? "is-busiest" : ""
-                    }`}
-                    key={stop.id}
-                    style={{
-                      left: `${(stop.x / routeWidth) * 100}%`,
-                      top: `${((stop.y + 30) / routeHeight) * 100}%`
-                    }}
-                  >
-                    {backlog}
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="jeepney-layer" aria-hidden="true">
-              {markerPositions.map((jeepney) => (
-                <div
-                  className={`jeepney-marker ${
-                    jeepney.isActive ? "is-active" : "is-waiting"
-                  }`}
-                  key={jeepney.id}
-                  style={{
-                    left: jeepney.left,
-                    top: jeepney.top
-                  }}
-                >
-                  <span>{jeepney.label}</span>
-                </div>
-              ))}
-            </div>
-
-            <div className="map-zoom-controls" aria-hidden="true">
-              <span>+</span>
-              <span>-</span>
-              <span>◎</span>
-            </div>
-
-            <p className="map-attribution">
-              Streets sketched from Makati corridor references and OpenStreetMap
-              landmarks.
-            </p>
-          </div>
-
-          <dl className="route-summary">
-            <div>
-              <dt>Passenger backlog</dt>
-              <dd>{currentMetric?.passengerBacklog ?? 0}</dd>
-            </div>
-            <div>
-              <dt>Served riders</dt>
-              <dd>{currentMetric?.totalPassengersServed ?? 0}</dd>
-            </div>
-            <div>
-              <dt>Pressure point</dt>
-              <dd>{busiestStopName ?? "Balanced"}</dd>
-            </div>
-          </dl>
-        </div>
-
-        <aside className="queue-panel" aria-label="Queue state">
-          <div className="queue-panel-header">
-            <p className="eyebrow">Round Robin state</p>
-            <h3>Makati dispatch queue</h3>
-          </div>
-
-          <div className="queue-active-card">
-            <span>Running now</span>
-            <strong>{activeJeepney?.label ?? "Standby"}</strong>
+      <div className="jeepney-dashboard">
+        <section className="info-panel lesson-summary" aria-label="Concept overview">
+          <div className="lesson-summary-copy">
+            <p className="eyebrow">Concept overview</p>
+            <h3>Time-Sliced Scheduling with Starvation Prevention</h3>
             <p>
-              {activeJeepney
-                ? `${activeJeepney.stopName}, ${currentEvent?.servedPassengers ?? 0} riders served this tick`
-                : "Press start to dispatch the first jeepney into the corridor."}
+              Each jeepney gets a short turn on the corridor. The ready queue
+              shows who runs next, and aging promotes a long-waiting jeepney
+              before it starves.
             </p>
           </div>
 
-          <div className="queue-list">
-            {currentFrame.queue.map((jeepneyId, index) => {
-              const jeepney = markerPositions.find(
-                (candidate) => candidate.id === jeepneyId
-              );
-
-              if (!jeepney) {
-                return null;
-              }
-
-              const waitTicks = currentMetric?.waitByJeepneyId[jeepneyId] ?? 0;
-              const isAtRisk =
-                currentMetric?.atRiskJeepneyIds.includes(jeepneyId) ?? false;
-
-              return (
-                <article
-                  className={`queue-item ${isAtRisk ? "is-risk" : ""}`}
-                  key={jeepney.id}
-                >
-                  <span>Q{index + 1}</span>
-                  <div>
-                    <strong>{jeepney.label}</strong>
-                    <p>
-                      Waiting at {jeepney.stopName} for {waitTicks} ticks
-                      {isAtRisk ? " (starvation risk)" : ""}
-                    </p>
-                  </div>
-                </article>
-              );
-            })}
-
-            {currentFrame.queue.length === 0 ? (
-              <p className="queue-empty">Queue empty. Active jeepney keeps lane.</p>
-            ) : null}
-          </div>
-
-          <dl className="metric-list">
-            <div>
-              <dt>Throughput</dt>
-              <dd>{currentMetric?.throughput ?? 0} stops</dd>
-            </div>
-            <div>
-              <dt>Avg queued wait / jeepney</dt>
-              <dd>{formatMetricValue(currentMetric?.averageWaitTime ?? 0)} ticks</dd>
-            </div>
-            <div>
-              <dt>Context switches</dt>
-              <dd>{currentMetric?.contextSwitches ?? 0}</dd>
-            </div>
-            <div>
-              <dt>Starvation risk</dt>
-              <dd>{currentMetric?.starvationRisk ?? 0} jeepneys</dd>
-            </div>
-          </dl>
-        </aside>
-      </div>
-
-      <div className="panel-grid">
-        <section className="info-panel">
-          <div className="panel-section-header">
-            <div>
-              <p className="eyebrow">OS mapping</p>
-              <h3>Concept annotations</h3>
-            </div>
-            <p>Labels stay tied to current tick, not static glossary text.</p>
-          </div>
-
-          <div className="concept-grid">
-            {conceptCards.map((card) => (
-              <article className="concept-card" key={card.title}>
-                <span>{card.tag}</span>
-                <h4>{card.title}</h4>
-                <p>{card.body}</p>
+          <div className="lesson-metrics">
+            {lessonMetrics.map((item) => (
+              <article className="lesson-metric" key={item.label}>
+                <span>{item.label}</span>
+                <strong>{item.value}</strong>
+                <p>{item.detail}</p>
               </article>
             ))}
           </div>
         </section>
 
-        <section className="info-panel">
+        <div className="live-grid">
+          <section className="route-preview" aria-label="Makati jeepney corridor preview">
+            <div className="route-preview-shell">
+              <div className="route-preview-header">
+                <div>
+                  <p className="eyebrow">Corridor map</p>
+                  <h3>PRC to Buendia</h3>
+                </div>
+                <div className="route-preview-meta">
+                  <p>{activeStatusCopy}</p>
+                </div>
+              </div>
+
+              <div className="route-canvas route-canvas-map">
+                <span className={`traffic-pill is-${corridorTrafficLevel}`}>
+                  Traffic {formatTrafficLevel(corridorTrafficLevel)}
+                </span>
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 760 360"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  {makatiRoads.map((road) => (
+                    <g key={road.id}>
+                      <path className={`map-road-casing is-${road.tone}`} d={road.path} />
+                      <path className={`map-road is-${road.tone}`} d={road.path} />
+                      {visibleRoadLabelIds.has(road.id) ? (
+                        <text
+                          className={`map-road-label is-${road.tone}`}
+                          x={road.labelX}
+                          y={road.labelY}
+                        >
+                          {road.name}
+                        </text>
+                      ) : null}
+                    </g>
+                  ))}
+
+                  {makatiMapLabels
+                    .filter((label) => label.kind === "district")
+                    .map((label) => (
+                      <text
+                        className={`map-area-label is-${label.kind}`}
+                        key={label.id}
+                        x={label.x}
+                        y={label.y}
+                      >
+                        {label.name}
+                      </text>
+                    ))}
+
+                  <path className="route-line-shadow" d={jeepneyRoutePath} />
+                  <path className="route-line" d={jeepneyRoutePath} />
+
+                  {segmentStates.map((segment) => (
+                    <g key={segment.id}>
+                      <path className="traffic-segment-shadow" d={segment.path} />
+                      <path
+                        className={`traffic-segment is-${segment.level}`}
+                        d={segment.path}
+                      />
+                    </g>
+                  ))}
+
+                  {jeepneyRouteLayout.map((stopLayout) => {
+                    const stop = routeStops.find(
+                      (candidate) => candidate.id === stopLayout.stopId
+                    );
+                    const backlog = getStopBacklog(currentMetric, stopLayout.stopId);
+                    const isBusiest = currentMetric?.busiestStopId === stopLayout.stopId;
+                    const showBadge = visibleStopBadgeIds.has(stopLayout.stopId);
+                    const badgeWidth = backlog >= 10 ? 72 : 64;
+                    const badgeX = stopLayout.x - badgeWidth / 2;
+                    const badgeY = stopLayout.y + 16;
+
+                    return (
+                      <g key={stopLayout.stopId}>
+                        <circle
+                          className={`stop-ring ${isBusiest ? "is-busiest" : ""}`}
+                          cx={stopLayout.x}
+                          cy={stopLayout.y}
+                          r="10"
+                        />
+                        <circle
+                          className={`stop-core ${isBusiest ? "is-busiest" : ""}`}
+                          cx={stopLayout.x}
+                          cy={stopLayout.y}
+                          r="4.5"
+                        />
+                        <text
+                          className="stop-label"
+                          x={stopLayout.x + (stopLayout.labelDx ?? 0)}
+                          y={stopLayout.y + (stopLayout.labelDy ?? -22)}
+                        >
+                          {stop?.name ?? stopLayout.stopId}
+                        </text>
+                        {showBadge ? (
+                          <g
+                            className={`stop-load-badge ${isBusiest ? "is-busiest" : ""}`}
+                            transform={`translate(${badgeX} ${badgeY})`}
+                          >
+                            <rect height="24" rx="12" width={badgeWidth} />
+                            <text x={badgeWidth / 2} y="16">
+                              {backlog} riders
+                            </text>
+                          </g>
+                        ) : null}
+                      </g>
+                    );
+                  })}
+
+                  {markerPositions.map((jeepney) => (
+                    <g
+                      className={`map-jeepney-token ${
+                        jeepney.isActive ? "is-active" : "is-waiting"
+                      }`}
+                      key={jeepney.id}
+                      transform={`translate(${jeepney.mapX} ${jeepney.mapY})`}
+                    >
+                      <rect height="28" rx="14" width="38" x="-19" y="-14" />
+                      <text x="0" y="4">
+                        {jeepney.label}
+                      </text>
+                    </g>
+                  ))}
+                </svg>
+              </div>
+
+              <div className="route-legend" aria-label="Map legend">
+                <span className="route-legend-chip is-active">Active</span>
+                <span className="route-legend-chip is-waiting">Queued</span>
+                <span className="route-legend-chip is-backlog">Backlog</span>
+              </div>
+            </div>
+          </section>
+
+          <aside className="queue-panel" aria-label="Ready queue and starvation prevention">
+            <div className="queue-panel-header">
+              <p className="eyebrow">Ready queue</p>
+              <h3>Dispatch order</h3>
+              <p>
+                Front of the queue gets the next turn. Aging promotes long-waiting
+                units.
+              </p>
+            </div>
+
+            <div className="queue-active-card">
+              <span>Current slice</span>
+              <div className="queue-active-card-body">
+                <strong>{activeJeepney?.label ?? "Standby"}</strong>
+                <p>{queueCardCopy}</p>
+              </div>
+            </div>
+
+            <div
+              className={`queue-aging-note ${
+                agingTriggered ? "is-triggered" : firstAtRiskEntry ? "is-warning" : ""
+              }`}
+            >
+              <strong>Aging watch</strong>
+              <p>{starvationPanelCopy}</p>
+            </div>
+
+            <div className="queue-list">
+              {queueEntries.map((entry, index) => (
+                <article
+                  className={`queue-item ${entry.isAtRisk ? "is-risk" : ""}`}
+                  key={entry.jeepney.id}
+                >
+                  <div
+                    aria-label={`Queue position ${index + 1}`}
+                    className="queue-item-order"
+                  >
+                    <strong>{index + 1}</strong>
+                  </div>
+                  <div className="queue-item-main">
+                    <strong>{entry.jeepney.label}</strong>
+                    <p>{entry.jeepney.stopName}</p>
+                  </div>
+                  <div className={`queue-item-state ${entry.isAtRisk ? "is-risk" : ""}`}>
+                    <strong>{entry.waitTicks}t</strong>
+                    {entry.isAtRisk ? <p>aging soon</p> : null}
+                  </div>
+                </article>
+              ))}
+
+              {queueEntries.length === 0 ? (
+                <p className="queue-empty">
+                  Ready queue clear. The current jeepney keeps the lane until its
+                  time slice ends.
+                </p>
+              ) : null}
+            </div>
+
+            <dl className="metric-list queue-metric-list">
+              {queueMetricItems.map((item) => (
+                <div key={item.label}>
+                  <dt>{item.label}</dt>
+                  <dd>{item.value}</dd>
+                </div>
+              ))}
+            </dl>
+          </aside>
+        </div>
+
+        <section className="info-panel trace-panel" aria-label="Scheduling Gantt chart">
           <div className="panel-section-header">
             <div>
-              <p className="eyebrow">Phase 3 focus</p>
-              <h3>Learning notes</h3>
+              <p className="eyebrow">Tick history</p>
+              <h3>Scheduling trace</h3>
             </div>
             <p>
-              More riders create pressure from PRC down through P. Ocampo,
-              Yakal, and Buendia. Smaller slices add more switches. Lower aging
-              threshold promotes fairness sooner.
+              Each column is one tick. Numbers mark the active time slice step,
+              and <strong>!</strong> marks a jeepney that is close to starvation.
             </p>
           </div>
 
-          <div className="note-stack">
-            <p>{scenario.description}</p>
+          <div className="gantt-scroll">
+            <div
+              className="gantt-grid"
+              style={{
+                gridTemplateColumns: `120px repeat(${simulationResult.events.length}, minmax(42px, 1fr))`
+              }}
+            >
+              <div className="gantt-label gantt-corner">Jeepney</div>
+              {simulationResult.events.map((event) => (
+                <div
+                  className={`gantt-tick ${
+                    event.tick === currentFrame.tick ? "is-current" : ""
+                  }`}
+                  key={`tick-${event.tick}`}
+                >
+                  T{event.tick}
+                </div>
+              ))}
+
+              {simulationConfig.jeepneys.map((jeepney) => (
+                <div className="gantt-row" key={jeepney.id}>
+                  <div className="gantt-label">{jeepney.label}</div>
+                  {simulationResult.events.map((event) => {
+                    const metric = simulationResult.metrics[event.tick];
+                    const isActive = event.activeJeepneyId === jeepney.id;
+
+                    return (
+                      <div
+                        className={getGanttCellClass(
+                          playbackFrames[event.tick + 1],
+                          metric,
+                          jeepney.id
+                        )}
+                        key={`${jeepney.id}-${event.tick}`}
+                        title={
+                          isActive
+                            ? `${jeepney.label} running at ${getStopName(event.stopId)}`
+                            : metric.atRiskJeepneyIds.includes(jeepney.id)
+                              ? `${jeepney.label} near starvation`
+                              : `${jeepney.label} waiting`
+                        }
+                      >
+                        {isActive ? event.quantumUsed : metric.atRiskJeepneyIds.includes(jeepney.id) ? "!" : ""}
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="gantt-legend">
+            <span className="legend-chip is-active">Active time slice</span>
+            <span className="legend-chip is-waiting">Waiting in ready queue</span>
+            <span className="legend-chip is-risk">Near starvation</span>
+            <span className="legend-chip is-aging">Aging dispatch</span>
+          </div>
+        </section>
+
+        <section className="info-panel control-panel" aria-label="Learning controls">
+          <div className="panel-section-header">
+            <div>
+              <p className="eyebrow">Experiment</p>
+              <h3>Adjust the scheduler</h3>
+            </div>
             <p>
-              Concrete load link: passenger arrival rate increases stop backlog,
-              which raises wait pressure on jeepneys still queued at the busiest
-              Makati choke points.
+              Change one input at a time so the effect on fairness and bunching
+              stays easy to read.
             </p>
+          </div>
+
+          <div className="learning-control-grid">
+            <label className="learning-control">
+              <span>Time quantum</span>
+              <strong>{controls.timeQuantum} ticks</strong>
+              <p>Shorter slices rotate the lane more often.</p>
+              <input
+                max={4}
+                min={1}
+                onChange={(event) => {
+                  const timeQuantum = Number(event.target.value);
+
+                  setControls((current) => ({
+                    ...current,
+                    timeQuantum,
+                    agingThreshold: Math.max(current.agingThreshold, timeQuantum + 1)
+                  }));
+                }}
+                type="range"
+                value={controls.timeQuantum}
+              />
+            </label>
+
+            <label className="learning-control">
+              <span>Aging threshold</span>
+              <strong>{controls.agingThreshold} wait ticks</strong>
+              <p>Lower values rescue long-waiting jeepneys sooner.</p>
+              <input
+                max={10}
+                min={2}
+                onChange={(event) => {
+                  setControls((current) => ({
+                    ...current,
+                    agingThreshold: Number(event.target.value)
+                  }));
+                }}
+                type="range"
+                value={controls.agingThreshold}
+              />
+            </label>
+
+            <label className="learning-control">
+              <span>Jeepney count</span>
+              <strong>{controls.jeepneyCount} active units</strong>
+              <p>More jeepneys deepen the ready queue.</p>
+              <input
+                max={6}
+                min={2}
+                onChange={(event) => {
+                  setControls((current) => ({
+                    ...current,
+                    jeepneyCount: Number(event.target.value)
+                  }));
+                }}
+                type="range"
+                value={controls.jeepneyCount}
+              />
+            </label>
+
+            <label className="learning-control">
+              <span>Passenger arrival rate</span>
+              <strong>{controls.passengerArrivalRate} riders per stop</strong>
+              <p>Higher demand builds pressure and bunching at the stops.</p>
+              <input
+                max={5}
+                min={0}
+                onChange={(event) => {
+                  setControls((current) => ({
+                    ...current,
+                    passengerArrivalRate: Number(event.target.value)
+                  }));
+                }}
+                type="range"
+                value={controls.passengerArrivalRate}
+              />
+            </label>
           </div>
         </section>
       </div>
-
-      <section className="gantt-panel" aria-label="Scheduling Gantt chart">
-        <div className="panel-section-header">
-          <div>
-            <p className="eyebrow">Scheduling trace</p>
-            <h3>Gantt chart</h3>
-          </div>
-          <p>Active slice, waiting queue, and starvation pressure across ticks.</p>
-        </div>
-
-        <div className="gantt-scroll">
-          <div
-            className="gantt-grid"
-            style={{
-              gridTemplateColumns: `120px repeat(${simulationResult.events.length}, minmax(42px, 1fr))`
-            }}
-          >
-            <div className="gantt-label gantt-corner">Jeepney</div>
-            {simulationResult.events.map((event) => (
-              <div
-                className={`gantt-tick ${
-                  event.tick === currentFrame.tick ? "is-current" : ""
-                }`}
-                key={`tick-${event.tick}`}
-              >
-                T{event.tick}
-              </div>
-            ))}
-
-            {simulationConfig.jeepneys.map((jeepney) => (
-              <div className="gantt-row" key={jeepney.id}>
-                <div className="gantt-label">{jeepney.label}</div>
-                {simulationResult.events.map((event) => {
-                  const metric = simulationResult.metrics[event.tick];
-                  const isActive = event.activeJeepneyId === jeepney.id;
-
-                  return (
-                    <div
-                      className={getGanttCellClass(
-                        playbackFrames[event.tick + 1],
-                        metric,
-                        jeepney.id
-                      )}
-                      key={`${jeepney.id}-${event.tick}`}
-                      title={
-                        isActive
-                          ? `${jeepney.label} running at ${getStopName(event.stopId)}`
-                          : metric.atRiskJeepneyIds.includes(jeepney.id)
-                            ? `${jeepney.label} near starvation`
-                            : `${jeepney.label} waiting`
-                      }
-                    >
-                      {isActive ? event.quantumUsed : metric.atRiskJeepneyIds.includes(jeepney.id) ? "!" : ""}
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="gantt-legend">
-          <span className="legend-chip is-active">Active slice</span>
-          <span className="legend-chip is-waiting">Ready queue</span>
-          <span className="legend-chip is-risk">Starvation risk</span>
-          <span className="legend-chip is-aging">Aging dispatch</span>
-        </div>
-      </section>
     </>
   );
 }

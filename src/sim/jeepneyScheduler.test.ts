@@ -144,7 +144,7 @@ describe("runJeepneySimulation", () => {
         activeJeepneyId: "j1",
         throughput: 1,
         totalWaitTime: 1,
-        averageWaitTime: 0.5,
+        averageWaitTime: 1,
         contextSwitches: 0,
         starvationRisk: 0,
         queue: ["j2"],
@@ -152,14 +152,17 @@ describe("runJeepneySimulation", () => {
         waitByJeepneyId: {
           j1: 0,
           j2: 1
-        }
+        },
+        bunchingScore: 1,
+        bunchedStopIds: ["stop-a"],
+        maxBunchSize: 2
       }),
       expect.objectContaining({
         tick: 1,
         activeJeepneyId: "j1",
         throughput: 2,
         totalWaitTime: 2,
-        averageWaitTime: 1,
+        averageWaitTime: 2,
         contextSwitches: 0,
         starvationRisk: 1,
         queue: ["j2"],
@@ -167,14 +170,17 @@ describe("runJeepneySimulation", () => {
         waitByJeepneyId: {
           j1: 0,
           j2: 2
-        }
+        },
+        bunchingScore: 0,
+        bunchedStopIds: [],
+        maxBunchSize: 0
       }),
       expect.objectContaining({
         tick: 2,
         activeJeepneyId: "j2",
         throughput: 3,
         totalWaitTime: 3,
-        averageWaitTime: 1.5,
+        averageWaitTime: 1,
         contextSwitches: 1,
         starvationRisk: 0,
         queue: ["j1"],
@@ -182,7 +188,10 @@ describe("runJeepneySimulation", () => {
         waitByJeepneyId: {
           j1: 1,
           j2: 0
-        }
+        },
+        bunchingScore: 0,
+        bunchedStopIds: [],
+        maxBunchSize: 0
       })
     ]);
   });
@@ -218,6 +227,32 @@ describe("runJeepneySimulation", () => {
       passengerBacklog: 14
     });
     expect(result.metrics[1].busiestStopId).toBeTruthy();
+  });
+
+  it("reports bunching when multiple jeepneys stack at the same stop", () => {
+    const result = runJeepneySimulation(
+      createConfig({
+        ticks: 2,
+        timeQuantum: 1,
+        jeepneys: [
+          { id: "j1", label: "J1", initialStopIndex: 0 },
+          { id: "j2", label: "J2", initialStopIndex: 0 },
+          { id: "j3", label: "J3", initialStopIndex: 2 }
+        ]
+      })
+    );
+
+    expect(result.metrics[0]).toMatchObject({
+      bunchingScore: 1,
+      bunchedStopIds: ["stop-a"],
+      maxBunchSize: 2
+    });
+
+    expect(result.metrics[1]).toMatchObject({
+      bunchingScore: 0,
+      bunchedStopIds: [],
+      maxBunchSize: 0
+    });
   });
 
   it("returns final jeepney progress for pure input-to-output simulation", () => {

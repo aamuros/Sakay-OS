@@ -1,7 +1,8 @@
-import { act, useState } from "react";
+import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ScenarioWorkspace } from "./ScenarioWorkspace";
+import { App } from "../App";
 import { scenarios } from "../scenarios/scenarios";
 
 const tickDurationMs = 900;
@@ -23,8 +24,8 @@ function getButton(container: HTMLDivElement, label: string) {
 
 function getScenarioButton(container: HTMLDivElement, name: string) {
   const button = Array.from(
-    container.querySelectorAll<HTMLButtonElement>(".scenario-item")
-  ).find((candidate) => candidate.querySelector("h3")?.textContent?.trim() === name);
+    container.querySelectorAll<HTMLButtonElement>(".scenario-tab")
+  ).find((candidate) => candidate.querySelector("strong")?.textContent?.trim() === name);
 
   if (!button) {
     throw new Error(`Missing scenario button: ${name}`);
@@ -53,13 +54,7 @@ describe("ScenarioWorkspace", () => {
     const root: Root = createRoot(container);
 
     await act(async () => {
-      root.render(
-        <ScenarioWorkspace
-          activeScenarioId={scenarios[0].id}
-          onScenarioChange={() => {}}
-          scenarios={scenarios}
-        />
-      );
+      root.render(<ScenarioWorkspace activeScenario={scenarios[0]} />);
     });
 
     const sliders = Array.from(
@@ -107,39 +102,63 @@ describe("ScenarioWorkspace", () => {
     reactActEnvironment.IS_REACT_ACT_ENVIRONMENT = false;
   });
 
-  it("switches to EDSA overload simulator through scenario buttons", async () => {
+  it("keeps in-progress scenarios visible but disabled in the header switcher", async () => {
     reactActEnvironment.IS_REACT_ACT_ENVIRONMENT = true;
 
     const container = document.createElement("div");
     document.body.appendChild(container);
     const root: Root = createRoot(container);
 
-    function TestHarness() {
-      const [activeScenarioId, setActiveScenarioId] = useState(scenarios[0].id);
-
-      return (
-        <ScenarioWorkspace
-          activeScenarioId={activeScenarioId}
-          onScenarioChange={setActiveScenarioId}
-          scenarios={scenarios}
-        />
-      );
-    }
-
     await act(async () => {
-      root.render(<TestHarness />);
+      root.render(<App />);
     });
 
+    const edsaButton = getScenarioButton(container, "EDSA Overload");
+    const mrtButton = getScenarioButton(container, "MRT Breakdown");
+
+    expect(edsaButton.disabled).toBe(true);
+    expect(mrtButton.disabled).toBe(true);
+    expect(edsaButton.textContent).toContain("In Progress");
+    expect(mrtButton.textContent).toContain("In Progress");
+
     await act(async () => {
-      getScenarioButton(container, "EDSA Overload").click();
+      edsaButton.click();
+      mrtButton.click();
     });
 
     expect(
       container.querySelector("#active-scenario")?.textContent?.trim()
-    ).toBe("EDSA Overload");
-    expect(container.textContent).toContain("Corridor load balancer");
-    expect(container.textContent).toContain("Scheduling output");
-    expect(container.textContent).toContain("Preemption On");
+    ).toBe("Jeepney Bunching");
+    expect(container.textContent).toContain(
+      "Time-Sliced Scheduling with Starvation Prevention"
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+
+    container.remove();
+    reactActEnvironment.IS_REACT_ACT_ENVIRONMENT = false;
+  });
+
+  it("renders the jeepney lesson with clear queue and starvation surfaces", async () => {
+    reactActEnvironment.IS_REACT_ACT_ENVIRONMENT = true;
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root: Root = createRoot(container);
+
+    await act(async () => {
+      root.render(<ScenarioWorkspace activeScenario={scenarios[0]} />);
+    });
+
+    expect(container.textContent).toContain(
+      "Time-Sliced Scheduling with Starvation Prevention"
+    );
+    expect(container.textContent).toContain("Ready queue");
+    expect(container.textContent).toContain("Dispatch order");
+    expect(container.textContent).toContain("Starvation prevention");
+    expect(container.textContent).toContain("Scheduling trace");
 
     await act(async () => {
       root.unmount();

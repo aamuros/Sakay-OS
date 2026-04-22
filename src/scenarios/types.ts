@@ -1,6 +1,6 @@
 import type { ComponentType } from "react";
 
-export type ScenarioStatus = "active" | "planned";
+export type ScenarioStatus = "active" | "in-progress";
 
 export type ScenarioSummary = {
   id: string;
