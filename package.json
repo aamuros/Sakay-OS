@@ -1,0 +1,26 @@
+{
+  "name": "sakay-os",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json",
+    "preview": "vite preview",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.2.1",
+    "@types/react": "^18.2.66",
+    "@types/react-dom": "^18.2.22",
+    "jsdom": "^24.0.0",
+    "typescript": "^5.4.5",
+    "vite": "^5.2.0",
+    "vitest": "^1.4.0"
+  }
+}

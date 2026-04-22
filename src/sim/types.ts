@@ -30,6 +30,11 @@ export type SchedulingEvent = {
   queue: string[];
   reason: SimulationReason;
   quantumUsed: number;
+  didContextSwitch: boolean;
+  activeWaitTicks: number;
+  servedPassengers: number;
+  passengerBacklog: number;
+  busiestStopId: string | null;
 };
 
 export type MetricsSnapshot = {
@@ -41,6 +46,13 @@ export type MetricsSnapshot = {
   contextSwitches: number;
   starvationRisk: number;
   queue: string[];
+  atRiskJeepneyIds: string[];
+  waitByJeepneyId: Record<string, number>;
+  passengerBacklog: number;
+  stopPassengerQueues: Record<string, number>;
+  busiestStopId: string | null;
+  servedPassengers: number;
+  totalPassengersServed: number;
 };
 
 export type JeepneySimulationConfig = {
@@ -50,6 +62,8 @@ export type JeepneySimulationConfig = {
   timeQuantum: number;
   agingThreshold?: number;
   agingEnabled?: boolean;
+  passengerArrivalRate?: number;
+  passengerBoardingRate?: number;
 };
 
 export type JeepneyState = {
