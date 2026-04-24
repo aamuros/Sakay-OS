@@ -1023,6 +1023,16 @@ button {
   width: 100%;
 }
 
+.learning-control select {
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  color: var(--text);
+  min-height: 38px;
+  padding: 8px 10px;
+  width: 100%;
+}
+
 .panel-grid,
 .concept-grid,
 .shell-card-grid,
@@ -1150,24 +1160,38 @@ button {
   padding: 18px 24px 24px;
 }
 
+.mrt-board {
+  display: grid;
+  gap: 20px;
+  padding: 18px 24px 24px;
+}
+
 .edsa-focus-header,
 .edsa-current-state,
 .edsa-route-lanes,
 .edsa-controls,
 .edsa-route-facts,
-.edsa-event-rail {
+.edsa-event-rail,
+.mrt-focus-header,
+.mrt-current-state,
+.mrt-controls,
+.mrt-line-panel,
+.mrt-backup-routes,
+.mrt-event-rail {
   display: grid;
   gap: 12px;
 }
 
-.edsa-focus-header {
+.edsa-focus-header,
+.mrt-focus-header {
   align-items: end;
   border-bottom: 1px solid var(--line);
   grid-template-columns: minmax(0, 1fr) minmax(260px, 420px);
   padding-bottom: 18px;
 }
 
-.edsa-focus-header h3 {
+.edsa-focus-header h3,
+.mrt-focus-header h3 {
   font-size: clamp(1.7rem, 3vw, 3rem);
   letter-spacing: 0;
   line-height: 1;
@@ -1176,24 +1200,30 @@ button {
 }
 
 .edsa-focus-header p:last-child,
-.edsa-event-rail p {
+.edsa-event-rail p,
+.mrt-focus-header p:last-child,
+.mrt-event-rail p,
+.mrt-line-header p {
   color: var(--muted);
   line-height: 1.5;
   margin: 0;
 }
 
-.edsa-controls {
+.edsa-controls,
+.mrt-controls {
   align-items: end;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(150px, auto);
 }
 
-.edsa-controls .learning-control {
+.edsa-controls .learning-control,
+.mrt-controls .learning-control {
   background: transparent;
   border-color: var(--line);
   padding: 12px;
 }
 
-.edsa-control-summary {
+.edsa-control-summary,
+.mrt-control-summary {
   background: var(--surface-soft);
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -1207,7 +1237,11 @@ button {
 .edsa-current-state span,
 .edsa-route-lane-header span,
 .edsa-route-facts dt,
-.edsa-event-rail li span {
+.edsa-event-rail li span,
+.mrt-control-summary span,
+.mrt-current-state span,
+.mrt-backup-route span,
+.mrt-event-rail li span {
   color: var(--subtle);
   font-size: 0.72rem;
   font-weight: 900;
@@ -1218,33 +1252,149 @@ button {
 .edsa-control-summary strong,
 .edsa-current-state strong,
 .edsa-route-lane-header strong,
-.edsa-route-facts dd {
+.edsa-route-facts dd,
+.mrt-control-summary strong,
+.mrt-current-state strong,
+.mrt-backup-route strong {
   color: var(--text);
   font-weight: 900;
 }
 
-.edsa-current-state {
+.edsa-current-state,
+.mrt-current-state {
   background: #17211f;
   border-radius: var(--radius);
   color: #ffffff;
-  grid-template-columns: minmax(0, 1.7fr) repeat(3, minmax(120px, 0.55fr));
+  grid-template-columns: minmax(0, 1.7fr) repeat(4, minmax(105px, 0.5fr));
   padding: 16px;
 }
 
-.edsa-current-state div {
+.edsa-current-state {
+  grid-template-columns: minmax(0, 1.7fr) repeat(3, minmax(120px, 0.55fr));
+}
+
+.edsa-current-state div,
+.mrt-current-state div {
   display: grid;
   gap: 6px;
   min-width: 0;
 }
 
-.edsa-current-state div:first-child {
+.edsa-current-state div:first-child,
+.mrt-current-state div:first-child {
   max-width: 760px;
 }
 
-.edsa-current-state strong {
+.edsa-current-state strong,
+.mrt-current-state strong {
   color: #ffffff;
   line-height: 1.35;
   overflow-wrap: anywhere;
+}
+
+.mrt-line-panel {
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+.mrt-line-header {
+  align-items: end;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.mrt-line-header h3 {
+  font-size: 1.4rem;
+  margin: 0;
+}
+
+.mrt-line-track {
+  background: linear-gradient(90deg, transparent 0 4%, var(--route) 4% 96%, transparent 96%) 0 54px / 100% 4px no-repeat;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(13, minmax(104px, 1fr));
+  margin: 16px 18px 8px;
+  min-height: 150px;
+  overflow-x: auto;
+  padding: 44px 0 12px;
+}
+
+.mrt-station-node {
+  display: grid;
+  gap: 7px;
+  justify-items: center;
+  min-width: 0;
+  text-align: center;
+}
+
+.mrt-station-node span {
+  background: #ffffff;
+  border: 3px solid var(--route);
+  border-radius: 999px;
+  display: block;
+  height: 22px;
+  width: 22px;
+}
+
+.mrt-station-node strong {
+  color: var(--text);
+  font-size: 0.82rem;
+  line-height: 1.15;
+}
+
+.mrt-station-node em {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.mrt-station-node.is-failed span {
+  background: var(--red-soft);
+  border-color: var(--red);
+  box-shadow: 0 0 0 6px rgba(185, 74, 61, 0.14);
+}
+
+.mrt-station-node.is-failed strong,
+.mrt-station-node.is-failed em {
+  color: #8b3028;
+}
+
+.mrt-backup-routes {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.mrt-backup-route {
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.mrt-backup-route div:first-child {
+  display: grid;
+  gap: 5px;
+}
+
+.mrt-backup-track {
+  background: var(--surface-muted);
+  border-radius: 999px;
+  height: 12px;
+  overflow: hidden;
+}
+
+.mrt-backup-track span {
+  background: var(--green);
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+  transition: width 240ms ease;
 }
 
 .edsa-route-lanes {
@@ -1356,18 +1506,21 @@ button {
   overflow-wrap: anywhere;
 }
 
-.edsa-event-rail {
+.edsa-event-rail,
+.mrt-event-rail {
   border-top: 1px solid var(--line);
   grid-template-columns: minmax(180px, 0.36fr) minmax(0, 1fr);
   padding-top: 16px;
 }
 
-.edsa-event-rail h3 {
+.edsa-event-rail h3,
+.mrt-event-rail h3 {
   font-size: 1rem;
   margin: 0;
 }
 
-.edsa-event-rail ol {
+.edsa-event-rail ol,
+.mrt-event-rail ol {
   display: grid;
   gap: 8px;
   list-style: none;
@@ -1375,7 +1528,8 @@ button {
   padding: 0;
 }
 
-.edsa-event-rail li {
+.edsa-event-rail li,
+.mrt-event-rail li {
   align-items: start;
   display: grid;
   gap: 10px;
@@ -1383,7 +1537,8 @@ button {
   min-width: 0;
 }
 
-.edsa-event-rail li span {
+.edsa-event-rail li span,
+.mrt-event-rail li span {
   padding-top: 2px;
 }
 
@@ -1502,7 +1657,12 @@ button {
   .edsa-current-state,
   .edsa-controls,
   .edsa-route-lane,
-  .edsa-event-rail {
+  .edsa-event-rail,
+  .mrt-focus-header,
+  .mrt-current-state,
+  .mrt-controls,
+  .mrt-backup-routes,
+  .mrt-event-rail {
     grid-template-columns: 1fr;
   }
 
@@ -1517,7 +1677,8 @@ button {
   .control-bar,
   .route-preview-header,
   .panel-section-header,
-  .corridor-intro {
+  .corridor-intro,
+  .mrt-line-header {
     align-items: start;
     grid-template-columns: 1fr;
   }
@@ -1583,6 +1744,7 @@ button {
   .control-bar,
   .jeepney-dashboard,
   .edsa-board,
+  .mrt-board,
   .trace-panel,
   .control-panel,
   .lesson-summary,
@@ -1617,6 +1779,30 @@ button {
 
   .edsa-event-rail li {
     grid-template-columns: 40px minmax(0, 1fr);
+  }
+
+  .mrt-line-track {
+    background: linear-gradient(180deg, transparent 0 1%, var(--route) 1% 99%, transparent 99%) 11px 0 / 4px 100% no-repeat;
+    gap: 12px;
+    grid-template-columns: 1fr;
+    min-height: auto;
+    margin: 12px 0 4px;
+    overflow-x: visible;
+    padding: 0 0 0 12px;
+  }
+
+  .mrt-station-node {
+    align-items: center;
+    gap: 8px;
+    grid-template-columns: 24px minmax(0, 1fr);
+    justify-items: start;
+    max-width: none;
+    text-align: left;
+    width: 100%;
+  }
+
+  .mrt-station-node em {
+    grid-column: 2;
   }
 
   .queue-item-state {

@@ -7,6 +7,7 @@ import { scenarios } from "../scenarios/scenarios";
 
 const tickDurationMs = 900;
 const edsaTickDurationMs = 950;
+const mrtTickDurationMs = 900;
 const reactActEnvironment = globalThis as typeof globalThis & {
   IS_REACT_ACT_ENVIRONMENT?: boolean;
 };
@@ -103,7 +104,7 @@ describe("ScenarioWorkspace", () => {
     reactActEnvironment.IS_REACT_ACT_ENVIRONMENT = false;
   });
 
-  it("enables EDSA while keeping MRT disabled in the header switcher", async () => {
+  it("enables EDSA and MRT in the header switcher", async () => {
     reactActEnvironment.IS_REACT_ACT_ENVIRONMENT = true;
 
     const container = document.createElement("div");
@@ -118,9 +119,9 @@ describe("ScenarioWorkspace", () => {
     const mrtButton = getScenarioButton(container, "MRT Breakdown");
 
     expect(edsaButton.disabled).toBe(false);
-    expect(mrtButton.disabled).toBe(true);
+    expect(mrtButton.disabled).toBe(false);
     expect(edsaButton.textContent).toContain("Active");
-    expect(mrtButton.textContent).toContain("In Progress");
+    expect(mrtButton.textContent).toContain("Active");
 
     await act(async () => {
       edsaButton.click();
@@ -140,7 +141,11 @@ describe("ScenarioWorkspace", () => {
 
     expect(
       container.querySelector("#active-scenario")?.textContent?.trim()
-    ).toBe("EDSA Overload");
+    ).toBe("MRT Breakdown");
+    expect(container.textContent).toContain("Fault tolerance and failover");
+    expect(container.textContent).toContain(
+      "MRT service degrades, fails over passengers, then recovers."
+    );
 
     await act(async () => {
       root.unmount();
@@ -178,6 +183,88 @@ describe("ScenarioWorkspace", () => {
 
     expect(container.textContent).toContain("after EDSA reached 2");
     expect(container.textContent).toContain("Taking overflow");
+
+    await act(async () => {
+      root.unmount();
+    });
+
+    container.remove();
+    reactActEnvironment.IS_REACT_ACT_ENVIRONMENT = false;
+  });
+
+  it("renders the MRT lesson around fault injection, migration, and recovery", async () => {
+    vi.useFakeTimers();
+    reactActEnvironment.IS_REACT_ACT_ENVIRONMENT = true;
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root: Root = createRoot(container);
+
+    await act(async () => {
+      root.render(<ScenarioWorkspace activeScenario={scenarios[2]} />);
+    });
+
+    expect(container.textContent).toContain("Failed station");
+    expect(container.textContent).toContain("Recovery tick");
+    expect(container.textContent).toContain("Fault injection");
+    expect(container.textContent).toContain("MRT-3 line");
+    expect(container.textContent).toContain("North Avenue");
+    expect(container.textContent).toContain("Araneta Center-Cubao");
+    expect(container.textContent).toContain("Taft Avenue");
+    expect(container.textContent).toContain("EDSA Carousel");
+    expect(container.textContent).toContain("Event rail");
+
+    await act(async () => {
+      getButton(container, "Start").click();
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(mrtTickDurationMs);
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(mrtTickDurationMs);
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(mrtTickDurationMs);
+    });
+
+    expect(container.textContent).toContain("Cubao failed");
+    expect(container.textContent).toContain("Degraded");
+
+    await act(async () => {
+      vi.advanceTimersByTime(mrtTickDurationMs);
+    });
+
+    expect(container.textContent).toContain("passengers failed over to backup routes");
+
+    await act(async () => {
+      vi.advanceTimersByTime(mrtTickDurationMs);
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(mrtTickDurationMs);
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(mrtTickDurationMs);
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(mrtTickDurationMs);
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(mrtTickDurationMs);
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(mrtTickDurationMs);
+    });
+
+    expect(container.textContent).toContain("Recovery complete");
+    expect(container.textContent).toContain("Recovered");
 
     await act(async () => {
       root.unmount();
