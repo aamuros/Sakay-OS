@@ -1,19 +1,59 @@
 # Sakay OS
 
-Sakay OS is a browser-based teaching tool for operating-system scheduling concepts using Philippine transit scenarios. It uses a Vite + React + TypeScript UI with pure TypeScript simulation modules so the scheduling logic can be tested separately from the interface.
+Sakay OS is a classroom web app that explains operating system scheduling through familiar public transport examples in the Philippines.
 
-## Current Status
+Instead of showing abstract processes only, the project uses jeepneys, roads, and train routes to make scheduling easier to understand.
 
-- `Jeepney Bunching` is the main learning path and demonstrates Round Robin scheduling with aging.
-- `EDSA Overload` is available as a corridor-priority simulation for load balancing and preemption concepts.
-- `MRT Breakdown` is still a planned shell for future fault-tolerance and migration work.
+## What This Project Tries To Teach
 
-The long-term scope and sequencing live in [ROADMAP.md](/Users/aamuros/School-Projects/Sakay-OS/ROADMAP.md).
+The app connects OS ideas to transport situations:
 
-## Getting Started
+- Vehicle = process
+- Dispatcher or active lane = CPU
+- Waiting line = ready queue
+- Taking turns = scheduling
+- Time slice = quantum
+- Long waiting time = starvation risk
+- Aging = a way to prevent starvation
+
+The main demo is `Jeepney Bunching`, which focuses on `Round Robin + Aging`.
+
+## What You Can Show To Classmates
+
+### 1. Jeepney Bunching
+
+This is the main scenario of the project.
+
+It shows how jeepneys take turns using a fixed time slice. If one jeepney waits too long, aging helps it move forward so it will not be ignored for too long.
+
+Main ideas:
+- Round Robin scheduling
+- Time quantum
+- Context switching
+- Starvation prevention through aging
+
+### 2. EDSA Overload
+
+This scenario shows how traffic can be distributed when one route becomes too busy.
+
+Main ideas:
+- Priority scheduling
+- Preemption
+- Load balancing
+
+### 3. MRT Breakdown
+
+This scenario shows what happens when one part of the system fails and passengers need to be moved to backup routes.
+
+Main ideas:
+- Fault tolerance
+- Recovery
+- Process migration
+
+## How To Run The Project
 
 Requirements:
-- Node.js 18+ recommended
+- Node.js 18+
 - npm
 
 Install dependencies:
@@ -22,65 +62,51 @@ Install dependencies:
 npm install
 ```
 
-Start the development server:
+Start the app:
 
 ```bash
 npm run dev
 ```
 
-Build the production bundle:
+Open the local Vite link shown in the terminal.
+
+## How To Use The App
+
+1. Choose a scenario at the top of the page.
+2. Press `Start` to begin the simulation.
+3. Watch which vehicle or route becomes active at each tick.
+4. Read the queue, status, and metric changes while the simulation runs.
+5. Change the controls to see how the scheduling behavior changes.
+
+## Simple Project Flow
+
+- `src/scenarios/` contains the lessons shown in the interface.
+- `src/sim/` contains the actual simulation logic.
+- `src/components/` contains reusable UI parts.
+- `src/styles/` contains the app styling.
+
+If someone only wants to understand the project quickly, this README is enough.
+
+For implementation details:
+- Simulator notes: [src/sim/README.md](/Users/aamuros/School-Projects/Sakay-OS/src/sim/README.md)
+- Development plan: [ROADMAP.md](/Users/aamuros/School-Projects/Sakay-OS/ROADMAP.md)
+
+## Useful Commands
 
 ```bash
 npm run build
 ```
 
-Run type checks:
+Creates a production build.
 
 ```bash
 npm run lint
 ```
 
-Run tests:
+Runs TypeScript checks.
 
 ```bash
 npm run test
 ```
 
-## Project Structure
-
-- `src/components/` contains reusable React UI such as the scenario workspace.
-- `src/scenarios/` contains scenario definitions, stage components, and static teaching content.
-- `src/sim/` contains pure simulation logic and related tests.
-- `src/styles/` contains global styling.
-- `dist/` contains generated build output and should not be edited manually.
-
-Additional simulator notes are in [src/sim/README.md](/Users/aamuros/School-Projects/Sakay-OS/src/sim/README.md).
-
-## Scenarios
-
-### Jeepney Bunching
-
-Models the PRC-to-Buendia corridor and uses time-sliced dispatching to show queue rotation, wait pressure, and aging behavior.
-
-Key ideas:
-- Round Robin time quantum
-- Aging to reduce starvation risk
-- Tick-based playback and metrics snapshots
-
-### EDSA Overload
-
-Models traffic pressure across EDSA, C5, and Quirino to demonstrate:
-
-- Priority classes
-- Optional preemption
-- Load-threshold rerouting
-
-### MRT Breakdown
-
-Currently a placeholder stage reserved for future breakdown, recovery, and passenger migration behavior.
-
-## Development Notes
-
-- Keep simulation logic in `src/sim/` framework-agnostic and deterministic.
-- Add or update Vitest coverage for scheduler behavior before expanding UI behavior.
-- Treat `ROADMAP.md` as the source of truth for project scope.
+Runs the automated tests.
