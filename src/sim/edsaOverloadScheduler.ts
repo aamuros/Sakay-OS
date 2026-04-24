@@ -311,11 +311,12 @@ function shouldPreemptActiveVehicle(state: MutableSimulationState) {
   }
 
   const waitingVehicle = state.vehicleStates[waitingVehicleId];
+  const waitingVehicleCanPreempt =
+    waitingVehicle.priorityClass === "emergency" &&
+    getPriorityRank(waitingVehicle.priorityClass) >
+      getPriorityRank(activeVehicle.priorityClass);
 
-  return getPriorityRank(waitingVehicle.priorityClass) >
-    getPriorityRank(activeVehicle.priorityClass)
-    ? waitingVehicleId
-    : null;
+  return waitingVehicleCanPreempt ? waitingVehicleId : null;
 }
 
 function selectNextVehicle(state: MutableSimulationState) {

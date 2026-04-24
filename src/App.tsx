@@ -31,16 +31,16 @@ export function App() {
           <p className="eyebrow">Transit Scheduling Lab</p>
           <h1>Sakay OS</h1>
           <p className="app-subtitle">
-            Transit simulations that make scheduling behavior readable in one
-            glance.
+            Guided transit simulations for scheduling, priority, and load
+            balancing concepts.
           </p>
         </div>
 
         <div className="app-header-meta">
-          <span className="phase-badge">Interactive scenario workspace</span>
+          <span className="phase-badge">Class presentation mode</span>
           <p className="header-note">
-            Jeepney Bunching is the active lesson path. The other scenarios stay
-            visible as in-progress shells.
+            Jeepney Bunching and EDSA Overload are active lessons. MRT
+            Breakdown remains a roadmap tab.
           </p>
         </div>
 

@@ -21,7 +21,7 @@ export const scenarios: ScenarioDefinition[] = [
     algorithm: "Priority + Load Balancing",
     description:
       "Model corridor pressure across EDSA, C5, and Quirino, then show how priority classes, optional preemption, and rerouting react to overload.",
-    status: "in-progress",
+    status: "active",
     Stage: EdsaOverloadStage
   },
   {

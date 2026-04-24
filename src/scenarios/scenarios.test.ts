@@ -11,11 +11,11 @@ describe("scenario scaffold", () => {
     });
   });
 
-  it("marks the non-jeepney scenarios as in progress", () => {
+  it("marks EDSA active and keeps MRT in progress", () => {
     expect(scenarios.slice(1)).toEqual([
       expect.objectContaining({
         id: "edsa-overload",
-        status: "in-progress"
+        status: "active"
       }),
       expect.objectContaining({
         id: "mrt-breakdown",

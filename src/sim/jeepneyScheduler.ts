@@ -143,6 +143,9 @@ function selectNextJeepney(
     throw new Error("Ready queue cannot be empty when selecting next jeepney.");
   }
 
+  const normalDispatchReason = state.lastDispatchExpiredQuantum
+    ? "quantum-expired"
+    : "dispatch";
   const agingThreshold = getDispatchAgingThreshold(config);
 
   if (agingThreshold === null) {
@@ -150,7 +153,7 @@ function selectNextJeepney(
 
     return {
       activeJeepneyId: fallbackId,
-      reason: state.lastDispatchExpiredQuantum ? "quantum-expired" : "dispatch"
+      reason: normalDispatchReason
     };
   }
 
@@ -171,7 +174,16 @@ function selectNextJeepney(
 
     return {
       activeJeepneyId: fallbackId,
-      reason: state.lastDispatchExpiredQuantum ? "quantum-expired" : "dispatch"
+      reason: normalDispatchReason
+    };
+  }
+
+  if (agingCandidateIndex === 0) {
+    state.readyQueue.shift();
+
+    return {
+      activeJeepneyId: fallbackId,
+      reason: normalDispatchReason
     };
   }
 

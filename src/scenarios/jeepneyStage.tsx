@@ -15,7 +15,11 @@ import {
   type JeepneyPlaybackState
 } from "../sim/jeepneyPlayback";
 import { runJeepneySimulation } from "../sim/jeepneyScheduler";
-import type { JeepneySimulationConfig, MetricsSnapshot } from "../sim/types";
+import type {
+  JeepneySimulationConfig,
+  MetricsSnapshot,
+  SchedulingEvent
+} from "../sim/types";
 
 type LearningControls = {
   timeQuantum: number;
@@ -64,11 +68,38 @@ function formatReason(reason: JeepneyPlaybackFrame["reason"]) {
     case "continue-quantum":
       return "Time slice continues";
     case "quantum-expired":
-      return "Time slice ended";
+      return "Quantum expired, next in line";
     case "aging-boost":
       return "Aging prevented starvation";
     default:
       return "Waiting for first dispatch";
+  }
+}
+
+function formatDispatchNarrative(
+  frame: JeepneyPlaybackFrame,
+  activeJeepney: MarkerPosition | null,
+  event: SchedulingEvent | null,
+  config: JeepneySimulationConfig
+) {
+  if (!activeJeepney) {
+    return "Press Start to begin the rotation.";
+  }
+
+  const sliceProgress = `${frame.quantumUsed}/${config.timeQuantum}`;
+  const boardedCount = event?.servedPassengers ?? 0;
+
+  switch (frame.reason) {
+    case "dispatch":
+      return `${activeJeepney.label} starts a FIFO slice at ${activeJeepney.stopName}. Slice ${sliceProgress}, ${boardedCount} boarded.`;
+    case "continue-quantum":
+      return `${activeJeepney.label} keeps the lane until its quantum ends. Slice ${sliceProgress}, ${boardedCount} boarded.`;
+    case "quantum-expired":
+      return `The previous quantum expired, so ${activeJeepney.label} takes the front of the queue. Slice ${sliceProgress}.`;
+    case "aging-boost":
+      return `${activeJeepney.label} waited ${event?.activeWaitTicks ?? 0} ticks, so aging moved it ahead. Slice ${sliceProgress}.`;
+    default:
+      return `${activeJeepney.label} is active at ${activeJeepney.stopName}. Slice ${sliceProgress}.`;
   }
 }
 
@@ -411,9 +442,12 @@ export function JeepneyStage(_props: ScenarioStageProps) {
       value: `${currentMetric?.starvationRisk ?? 0} unit${(currentMetric?.starvationRisk ?? 0) === 1 ? "" : "s"}`
     }
   ];
-  const queueCardCopy = activeJeepney
-    ? `${activeJeepney.stopName} · ${currentEvent?.quantumUsed ?? 0}/${simulationConfig.timeQuantum} · ${currentEvent?.servedPassengers ?? 0} boarded`
-    : "Press Start to begin the rotation.";
+  const queueCardCopy = formatDispatchNarrative(
+    currentFrame,
+    activeJeepney,
+    currentEvent,
+    simulationConfig
+  );
   const starvationPanelCopy = agingTriggered
     ? `${activeJeepney?.label ?? "A jeepney"} skipped ahead after waiting ${currentEvent?.activeWaitTicks ?? 0} ticks.`
     : firstAtRiskEntry
@@ -507,28 +541,6 @@ export function JeepneyStage(_props: ScenarioStageProps) {
       </div>
 
       <div className="jeepney-dashboard">
-        <section className="info-panel lesson-summary" aria-label="Concept overview">
-          <div className="lesson-summary-copy">
-            <p className="eyebrow">Concept overview</p>
-            <h3>Time-Sliced Scheduling with Starvation Prevention</h3>
-            <p>
-              Each jeepney gets a short turn on the corridor. The ready queue
-              shows who runs next, and aging promotes a long-waiting jeepney
-              before it starves.
-            </p>
-          </div>
-
-          <div className="lesson-metrics">
-            {lessonMetrics.map((item) => (
-              <article className="lesson-metric" key={item.label}>
-                <span>{item.label}</span>
-                <strong>{item.value}</strong>
-                <p>{item.detail}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-
         <div className="live-grid">
           <section className="route-preview" aria-label="Makati jeepney corridor preview">
             <div className="route-preview-shell">
@@ -548,7 +560,7 @@ export function JeepneyStage(_props: ScenarioStageProps) {
                 </span>
                 <svg
                   aria-hidden="true"
-                  viewBox="0 0 760 360"
+                  viewBox="40 10 650 330"
                   xmlns="http://www.w3.org/2000/svg"
                 >
                   {makatiRoads.map((road) => (
@@ -733,6 +745,27 @@ export function JeepneyStage(_props: ScenarioStageProps) {
             </dl>
           </aside>
         </div>
+
+        <section className="info-panel lesson-summary" aria-label="Concept overview">
+          <div className="lesson-summary-copy">
+            <p className="eyebrow">Concept overview</p>
+            <h3>Time-Sliced Scheduling with Starvation Prevention</h3>
+            <p>
+              Each jeepney gets a short corridor turn. The queue shows who runs
+              next, while aging prevents long waits from becoming starvation.
+            </p>
+          </div>
+
+          <div className="lesson-metrics">
+            {lessonMetrics.map((item) => (
+              <article className="lesson-metric" key={item.label}>
+                <span>{item.label}</span>
+                <strong>{item.value}</strong>
+                <p>{item.detail}</p>
+              </article>
+            ))}
+          </div>
+        </section>
 
         <section className="info-panel trace-panel" aria-label="Scheduling Gantt chart">
           <div className="panel-section-header">

@@ -23,12 +23,6 @@ type RouteCard = CorridorRoute & {
   redirectedVehicles: number;
 };
 
-type ConceptCard = {
-  title: string;
-  tag: string;
-  body: string;
-};
-
 const corridorRoutes: CorridorRoute[] = [
   { id: "edsa", name: "EDSA" },
   { id: "c5", name: "C5" },
@@ -169,29 +163,8 @@ function formatDispatchReason(
   }
 }
 
-function describeDispatch(
-  snapshot: CorridorTickSnapshot,
-  vehicles: Record<string, CorridorVehicleState>
-) {
-  if (!snapshot.activeVehicleId || !snapshot.activeRouteId) {
-    return "No vehicle dispatched on this tick.";
-  }
-
-  const activeVehicle = vehicles[snapshot.activeVehicleId];
-  const completionCopy =
-    snapshot.activeRemainingServiceTicks === 0
-      ? "Completed this tick."
-      : `${snapshot.activeRemainingServiceTicks} service ticks remain.`;
-
-  if (snapshot.reason === "preempted" && snapshot.preemptedVehicleId) {
-    return `${activeVehicle.label} preempted ${
-      vehicles[snapshot.preemptedVehicleId].label
-    } on ${snapshot.activeRouteId.toUpperCase()}. ${completionCopy}`;
-  }
-
-  return `${activeVehicle.label} served ${snapshot.activeRouteId.toUpperCase()} as ${
-    formatPriority(snapshot.activePriorityClass).toLowerCase()
-  } traffic. ${completionCopy}`;
+function formatRouteLabel(routeId: CorridorRouteId | null) {
+  return routeId ? routeId.toUpperCase() : "Standby";
 }
 
 function buildRouteCards(
@@ -218,62 +191,21 @@ function countQueuedVehicles(snapshot: CorridorTickSnapshot) {
   );
 }
 
-function findMostLoadedRoute(snapshot: CorridorTickSnapshot) {
-  return corridorRoutes.reduce((mostLoadedRoute, route) => {
-    if (
-      snapshot.queueLengthByRouteId[route.id] >
-      snapshot.queueLengthByRouteId[mostLoadedRoute.id]
-    ) {
-      return route;
-    }
-
-    return mostLoadedRoute;
-  }, corridorRoutes[0]);
-}
-
-function buildConceptCards(
+function formatRedirectSummary(
   snapshot: CorridorTickSnapshot,
-  vehicles: Record<string, CorridorVehicleState>,
-  controls: CorridorControls,
-  preemptionEnabled: boolean
-): ConceptCard[] {
-  const redirectedLabels = snapshot.redirectedVehicleIds.map((vehicleId) => {
-    const vehicle = vehicles[vehicleId];
+  vehicles: Record<string, CorridorVehicleState>
+) {
+  if (snapshot.redirectedVehicleIds.length === 0) {
+    return "No new redirects";
+  }
 
-    return `${vehicle.label} -> ${vehicle.assignedRouteId.toUpperCase()}`;
-  });
+  return snapshot.redirectedVehicleIds
+    .map((vehicleId) => {
+      const vehicle = vehicles[vehicleId];
 
-  return [
-    {
-      title: "Priority ladder",
-      tag: "Priority scheduling",
-      body: `Emergency > bus > jeepney > private. Current dispatch class: ${formatPriority(
-        snapshot.activePriorityClass
-      )}.`
-    },
-    {
-      title: "Preemption switch",
-      tag: "Optional preemption",
-      body: preemptionEnabled
-        ? snapshot.preemptedVehicleId
-          ? `${vehicles[snapshot.preemptedVehicleId].label} got bumped when higher-priority traffic arrived.`
-          : "Enabled. Active work can be interrupted by a higher-priority arrival."
-        : "Disabled. Current work holds lane until it finishes."
-    },
-    {
-      title: "Load threshold",
-      tag: "Load balancing",
-      body: `Threshold set to ${controls.loadThreshold} queued-or-running vehicles per route. New arrivals reroute once preferred lane crosses it.`
-    },
-    {
-      title: "Redirect feed",
-      tag: "Congestion response",
-      body:
-        redirectedLabels.length > 0
-          ? redirectedLabels.join(", ")
-          : "No new reroutes on this tick."
-    }
-  ];
+      return `${vehicle.label} to ${formatRouteLabel(vehicle.assignedRouteId)}`;
+    })
+    .join(", ");
 }
 
 function getVehicleChipLabel(
@@ -285,6 +217,77 @@ function getVehicleChipLabel(
   const waitTicks = snapshot.waitByVehicleId[vehicleId] ?? 0;
 
   return `${vehicle.label} ${waitTicks}t`;
+}
+
+function getRoutePressureStatus(route: RouteCard, threshold: number) {
+  const waitingCount = route.queueIds.length;
+
+  if (route.id === "edsa") {
+    if (waitingCount > threshold) {
+      return "Over threshold";
+    }
+
+    if (waitingCount === threshold) {
+      return "At threshold";
+    }
+
+    return "Below threshold";
+  }
+
+  if (route.redirectedVehicles > 0) {
+    return "Taking overflow";
+  }
+
+  return "Relief route";
+}
+
+function getSnapshotHeadline(
+  snapshot: CorridorTickSnapshot,
+  vehicles: Record<string, CorridorVehicleState>,
+  threshold: number
+) {
+  if (snapshot.redirectedVehicleIds.length > 0) {
+    return `${formatRedirectSummary(snapshot, vehicles)} after EDSA reached ${threshold}.`;
+  }
+
+  if (snapshot.activeRouteId === "edsa" && snapshot.reason === "preempted") {
+    return "Emergency traffic stays on EDSA and interrupts lower-priority service.";
+  }
+
+  if (snapshot.queueLengthByRouteId.edsa >= threshold) {
+    return "EDSA is at threshold; new arrivals will move to the lighter route.";
+  }
+
+  if (snapshot.activeVehicleId && snapshot.activeRouteId) {
+    const activeVehicle = vehicles[snapshot.activeVehicleId];
+
+    return `${activeVehicle.label} is using ${formatRouteLabel(
+      snapshot.activeRouteId
+    )}; EDSA has room for new arrivals.`;
+  }
+
+  return "The corridor is clear and waiting for arrivals.";
+}
+
+function getRecentEvents(
+  timeline: CorridorTickSnapshot[],
+  currentIndex: number,
+  vehicles: Record<string, CorridorVehicleState>,
+  threshold: number
+) {
+  return timeline
+    .slice(0, currentIndex + 1)
+    .filter(
+      (snapshot) =>
+        snapshot.redirectedVehicleIds.length > 0 ||
+        snapshot.reason === "preempted" ||
+        snapshot.queueLengthByRouteId.edsa >= threshold
+    )
+    .slice(-4)
+    .map((snapshot) => ({
+      tick: snapshot.tick,
+      copy: getSnapshotHeadline(snapshot, vehicles, threshold)
+    }));
 }
 
 export function EdsaOverloadStage({ scenario }: ScenarioStageProps) {
@@ -304,15 +307,27 @@ export function EdsaOverloadStage({ scenario }: ScenarioStageProps) {
     simulationResult.vehicles,
     simulationResult.redirectedCountByRouteId
   );
-  const conceptCards = buildConceptCards(
-    currentSnapshot,
-    simulationResult.vehicles,
-    controls,
-    preemptionEnabled
-  );
-  const mostLoadedRoute = findMostLoadedRoute(currentSnapshot);
+  const activeVehicle = currentSnapshot.activeVehicleId
+    ? simulationResult.vehicles[currentSnapshot.activeVehicleId]
+    : null;
   const progressPercent =
     totalSteps <= 1 ? 100 : (currentIndex / (totalSteps - 1)) * 100;
+  const maxPressure = Math.max(
+    controls.loadThreshold + 2,
+    ...routeCards.map((route) => route.queueIds.length + 1)
+  );
+  const thresholdPercent = (controls.loadThreshold / maxPressure) * 100;
+  const currentHeadline = getSnapshotHeadline(
+    currentSnapshot,
+    simulationResult.vehicles,
+    controls.loadThreshold
+  );
+  const recentEvents = getRecentEvents(
+    simulationResult.timeline,
+    currentIndex,
+    simulationResult.vehicles,
+    controls.loadThreshold
+  );
 
   useEffect(() => {
     setCurrentStep(0);
@@ -402,19 +417,19 @@ export function EdsaOverloadStage({ scenario }: ScenarioStageProps) {
         </div>
       </div>
 
-      <section className="learning-controls" aria-label="EDSA overload controls">
-        <div className="panel-section-header">
+      <section className="edsa-board" aria-label="EDSA overload demonstration">
+        <div className="edsa-focus-header">
           <div>
-            <p className="eyebrow">Phase 5 tuning</p>
-            <h3>Corridor load balancer</h3>
+            <p className="eyebrow">Load balancing demo</p>
+            <h3>EDSA fills first. Overflow moves to lighter routes.</h3>
           </div>
           <p>
-            Shift congestion threshold and rush-hour burst, then watch routing
-            move arrivals across EDSA, C5, and Quirino.
+            Keep your eye on the threshold marker. Once EDSA reaches it, new
+            rush-hour arrivals are redirected to C5 or Quirino.
           </p>
         </div>
 
-        <div className="learning-control-grid edsa-control-grid">
+        <div className="edsa-controls" aria-label="EDSA overload controls">
           <label className="learning-control">
             <span>Load threshold</span>
             <strong>{controls.loadThreshold} vehicles</strong>
@@ -434,7 +449,7 @@ export function EdsaOverloadStage({ scenario }: ScenarioStageProps) {
 
           <label className="learning-control">
             <span>Rush-hour burst</span>
-            <strong>{controls.rushHourBurst} extra EDSA arrivals</strong>
+            <strong>{controls.rushHourBurst} arrivals</strong>
             <input
               max={3}
               min={0}
@@ -449,260 +464,139 @@ export function EdsaOverloadStage({ scenario }: ScenarioStageProps) {
             />
           </label>
 
-          <article className="learning-control learning-control-static">
-            <span>Preemption mode</span>
-            <strong>{preemptionEnabled ? "Emergency can seize lane" : "Active work cannot be interrupted"}</strong>
-            <p>
-              Toggle button above flips between strict priority scheduling and
-              finish-what-started service.
-            </p>
-          </article>
+          <div className="edsa-control-summary">
+            <span>Preemption</span>
+            <strong>{preemptionEnabled ? "Emergency on" : "Off"}</strong>
+          </div>
         </div>
-      </section>
 
-      <div className="live-grid">
-        <section className="route-preview" aria-label="Route queue pressure">
-          <div className="panel-section-header">
-            <div>
-              <p className="eyebrow">Route queues</p>
-              <h3>EDSA, C5, Quirino</h3>
-            </div>
-            <p>
-              Queue chips show current waits in ticks. Active route gets lifted
-              while congested routes push new arrivals away.
-            </p>
-          </div>
-
-          <div className="corridor-route-grid">
-            {routeCards.map((route) => (
-              <article
-                className={`corridor-route-card is-${route.id} ${
-                  route.currentActiveVehicle ? "is-active" : ""
-                }`}
-                key={route.id}
-              >
-                <div className="corridor-route-header">
-                  <div>
-                    <span>{route.name}</span>
-                    <h4>{currentSnapshot.queueLengthByRouteId[route.id]} queued</h4>
-                  </div>
-                  <strong>{formatWaitTime(route.averageWait)}t avg wait</strong>
-                </div>
-
-                <p className="corridor-route-active">
-                  {route.currentActiveVehicle
-                    ? `${route.currentActiveVehicle.label} running now`
-                    : "No active dispatch on this route"}
-                </p>
-
-                <div className="corridor-queue-chips">
-                  {route.queueIds.map((vehicleId) => {
-                    const vehicle = simulationResult.vehicles[vehicleId];
-
-                    return (
-                      <span
-                        className={`vehicle-chip is-${vehicle.priorityClass}`}
-                        key={vehicleId}
-                      >
-                        {getVehicleChipLabel(
-                          currentSnapshot,
-                          simulationResult.vehicles,
-                          vehicleId
-                        )}
-                      </span>
-                    );
-                  })}
-
-                  {route.queueIds.length === 0 ? (
-                    <span className="vehicle-chip is-empty">Queue clear</span>
-                  ) : null}
-                </div>
-
-                <dl className="corridor-route-metrics">
-                  <div>
-                    <dt>Redirected in</dt>
-                    <dd>{route.redirectedVehicles}</dd>
-                  </div>
-                  <div>
-                    <dt>Priority head</dt>
-                    <dd>
-                      {route.queueIds[0]
-                        ? formatPriority(
-                            simulationResult.vehicles[route.queueIds[0]].priorityClass
-                          )
-                        : "None"}
-                    </dd>
-                  </div>
-                </dl>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <aside className="queue-panel" aria-label="Dispatcher state">
-          <div className="queue-panel-header">
-            <p className="eyebrow">Central dispatcher</p>
-            <h3>Scheduling output</h3>
-          </div>
-
-          <div className="queue-active-card">
-            <span>Running now</span>
-            <strong>
-              {currentSnapshot.activeVehicleId
-                ? simulationResult.vehicles[currentSnapshot.activeVehicleId].label
-                : "Dispatcher idle"}
-            </strong>
-            <p>{describeDispatch(currentSnapshot, simulationResult.vehicles)}</p>
-          </div>
-
-          <div className="queue-list">
-            <article className="queue-item">
-              <span>Mode</span>
-              <div>
-                <strong>{preemptionEnabled ? "Preemption armed" : "Preemption disabled"}</strong>
-                <p>
-                  {preemptionEnabled
-                    ? "Emergency arrivals can interrupt lower-priority work."
-                    : "Current vehicle finishes before higher-priority work runs."}
-                </p>
-              </div>
-            </article>
-
-            <article className="queue-item">
-              <span>Redirects</span>
-              <div>
-                <strong>{currentSnapshot.redirectedVehicleIds.length} this tick</strong>
-                <p>
-                  {currentSnapshot.redirectedVehicleIds.length > 0
-                    ? currentSnapshot.redirectedVehicleIds
-                        .map((vehicleId) => {
-                          const vehicle = simulationResult.vehicles[vehicleId];
-
-                          return `${vehicle.label} -> ${vehicle.assignedRouteId.toUpperCase()}`;
-                        })
-                        .join(", ")
-                    : "No fresh reroutes on this tick."}
-                </p>
-              </div>
-            </article>
-
-            <article className="queue-item">
-              <span>Hot route</span>
-              <div>
-                <strong>{mostLoadedRoute.name}</strong>
-                <p>
-                  {currentSnapshot.queueLengthByRouteId[mostLoadedRoute.id]} vehicles
-                  waiting, {formatWaitTime(currentSnapshot.averageWaitByRouteId[mostLoadedRoute.id])}
-                  t average wait.
-                </p>
-              </div>
-            </article>
-          </div>
-
-          <dl className="metric-list">
-            <div>
-              <dt>Total queued</dt>
-              <dd>{countQueuedVehicles(currentSnapshot)}</dd>
-            </div>
-            <div>
-              <dt>Total redirected</dt>
-              <dd>{currentSnapshot.totalRedirectedVehicles}</dd>
-            </div>
-            <div>
-              <dt>Completed vehicles</dt>
-              <dd>{currentSnapshot.completedVehicles}</dd>
-            </div>
-            <div>
-              <dt>Active class</dt>
-              <dd>{formatPriority(currentSnapshot.activePriorityClass)}</dd>
-            </div>
-          </dl>
-        </aside>
-      </div>
-
-      <div className="panel-grid">
-        <section className="info-panel">
-          <div className="panel-section-header">
-            <div>
-              <p className="eyebrow">OS mapping</p>
-              <h3>Priority and load balancing</h3>
-            </div>
-            <p>Every card reads from current tick, not hard-coded notes.</p>
-          </div>
-
-          <div className="concept-grid">
-            {conceptCards.map((card) => (
-              <article className="concept-card" key={card.title}>
-                <span>{card.tag}</span>
-                <h4>{card.title}</h4>
-                <p>{card.body}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section className="info-panel">
-          <div className="panel-section-header">
-            <div>
-              <p className="eyebrow">Scenario note</p>
-              <h3>Why corridor pressure matters</h3>
-            </div>
-            <p>
-              Same workspace shell now hosts live multi-queue scheduling instead
-              of placeholder content.
-            </p>
-          </div>
-
-          <div className="note-stack">
-            <p>{scenario.description}</p>
-            <p>
-              EDSA acts like overloaded ready queue. C5 and Quirino become
-              balancing targets once threshold trips.
-            </p>
-            <p>
-              Emergency vehicles prove strict priority. Preemption toggle shows
-              difference between interruptible and non-interruptible service.
-            </p>
-          </div>
-        </section>
-      </div>
-
-      <section className="gantt-panel" aria-label="Dispatch trace">
-        <div className="panel-section-header">
+        <section className="edsa-current-state" aria-label="Current overload state">
           <div>
-            <p className="eyebrow">Tick-by-tick trace</p>
-            <h3>Corridor scheduler log</h3>
+            <span>Now</span>
+            <strong>{currentHeadline}</strong>
           </div>
-          <p>Highlighted card marks current playback tick.</p>
-        </div>
+          <div>
+            <span>Serving</span>
+            <strong>{activeVehicle?.label ?? "None"}</strong>
+          </div>
+          <div>
+            <span>Total queued</span>
+            <strong>{countQueuedVehicles(currentSnapshot)}</strong>
+          </div>
+          <div>
+            <span>Total redirected</span>
+            <strong>{currentSnapshot.totalRedirectedVehicles}</strong>
+          </div>
+        </section>
 
-        <div className="dispatch-trace-grid">
-          {simulationResult.timeline.map((snapshot) => (
+        <section className="edsa-route-lanes" aria-label="Route queue pressure">
+          {routeCards.map((route) => (
             <article
-              className={`dispatch-trace-card ${
-                snapshot.tick === currentSnapshot.tick ? "is-current" : ""
+              className={`edsa-route-lane is-${route.id} ${
+                route.currentActiveVehicle ? "is-active" : ""
               }`}
-              key={snapshot.tick}
+              key={route.id}
             >
-              <span>T{snapshot.tick}</span>
-              <strong>
-                {snapshot.activeVehicleId
-                  ? simulationResult.vehicles[snapshot.activeVehicleId].label
-                  : "Idle"}
-              </strong>
-              <p>{describeDispatch(snapshot, simulationResult.vehicles)}</p>
-              <div className="dispatch-trace-meta">
-                <span>{formatPriority(snapshot.activePriorityClass)}</span>
-                <span>
-                  {snapshot.activeRouteId
-                    ? snapshot.activeRouteId.toUpperCase()
-                    : "Standby"}
-                </span>
-                <span>{snapshot.totalRedirectedVehicles} redirected total</span>
+              <div className="edsa-route-lane-header">
+                <div>
+                  <span>{route.name}</span>
+                  <strong>
+                    {currentSnapshot.queueLengthByRouteId[route.id]} waiting
+                  </strong>
+                </div>
+                <p>{getRoutePressureStatus(route, controls.loadThreshold)}</p>
               </div>
+
+              <div className="edsa-pressure-track" aria-hidden="true">
+                <span
+                  className="edsa-threshold-marker"
+                  style={{ left: `${thresholdPercent}%` }}
+                />
+                <span
+                  className="edsa-pressure-fill"
+                  style={{
+                    width: `${(route.queueIds.length / maxPressure) * 100}%`
+                  }}
+                />
+              </div>
+
+              <div
+                className="corridor-queue-chips"
+                aria-label={`${route.name} waiting vehicles`}
+              >
+                {route.queueIds.slice(0, 6).map((vehicleId) => {
+                  const vehicle = simulationResult.vehicles[vehicleId];
+
+                  return (
+                    <span
+                      className={`vehicle-chip is-${vehicle.priorityClass} ${
+                        vehicle.wasRedirected ? "is-redirected" : ""
+                      }`}
+                      key={vehicleId}
+                      title={`${vehicle.label}, ${formatPriority(
+                        vehicle.priorityClass
+                      )}`}
+                    >
+                      {getVehicleChipLabel(
+                        currentSnapshot,
+                        simulationResult.vehicles,
+                        vehicleId
+                      )}
+                    </span>
+                  );
+                })}
+
+                {route.queueIds.length > 6 ? (
+                  <span className="vehicle-chip is-empty">
+                    +{route.queueIds.length - 6} more
+                  </span>
+                ) : null}
+
+                {route.queueIds.length === 0 ? (
+                  <span className="vehicle-chip is-empty">Clear</span>
+                ) : null}
+              </div>
+
+              <dl className="edsa-route-facts">
+                <div>
+                  <dt>Serving</dt>
+                  <dd>{route.currentActiveVehicle?.label ?? "None"}</dd>
+                </div>
+                <div>
+                  <dt>Avg wait</dt>
+                  <dd>{formatWaitTime(route.averageWait)}t</dd>
+                </div>
+                <div>
+                  <dt>Redirected in</dt>
+                  <dd>{route.redirectedVehicles}</dd>
+                </div>
+              </dl>
             </article>
           ))}
-        </div>
+        </section>
+
+        <section className="edsa-event-rail" aria-label="Recent overload events">
+          <div>
+            <p className="eyebrow">Recent events</p>
+            <h3>Only threshold and priority changes are shown.</h3>
+          </div>
+
+          <ol>
+            {recentEvents.length === 0 ? (
+              <li>
+                <span>T{currentSnapshot.tick}</span>
+                <p>{scenario.description}</p>
+              </li>
+            ) : (
+              recentEvents.map((event) => (
+                <li key={`${event.tick}-${event.copy}`}>
+                  <span>T{event.tick}</span>
+                  <p>{event.copy}</p>
+                </li>
+              ))
+            )}
+          </ol>
+        </section>
       </section>
     </>
   );

@@ -92,7 +92,45 @@ describe("runEdsaOverloadSimulation", () => {
     expect(result.timeline[1].preemptedVehicleId).toBeNull();
   });
 
-  it("redirects new arrivals away from overloaded routes", () => {
+  it("does not let non-emergency priority classes preempt active traffic", () => {
+    const result = runEdsaOverloadSimulation(
+      createConfig({
+        vehicles: [
+          {
+            id: "car-1",
+            label: "Car 1",
+            priorityClass: "private",
+            preferredRouteId: "edsa",
+            arrivalTick: 0,
+            serviceTicks: 3
+          },
+          {
+            id: "bus-1",
+            label: "Bus 1",
+            priorityClass: "bus",
+            preferredRouteId: "edsa",
+            arrivalTick: 1,
+            serviceTicks: 1
+          }
+        ],
+        ticks: 4,
+        loadThreshold: 3
+      })
+    );
+
+    expect(result.timeline.map((snapshot) => snapshot.activeVehicleId)).toEqual([
+      "car-1",
+      "car-1",
+      "car-1",
+      "bus-1"
+    ]);
+    expect(result.timeline[1]).toMatchObject({
+      reason: "continue-service",
+      preemptedVehicleId: null
+    });
+  });
+
+  it("redirects new arrivals when their preferred route is at capacity", () => {
     const congestedVehicles: CorridorVehicle[] = [
       {
         id: "bus-1",
@@ -140,6 +178,43 @@ describe("runEdsaOverloadSimulation", () => {
     expect(result.vehicles["bus-2"].assignedRouteId).toBe("c5");
     expect(result.vehicles["car-2"].assignedRouteId).toBe("quirino");
     expect(result.timeline[1].totalRedirectedVehicles).toBe(2);
+  });
+
+  it("keeps emergency vehicles on their preferred route under overload", () => {
+    const result = runEdsaOverloadSimulation(
+      createConfig({
+        vehicles: [
+          {
+            id: "bus-1",
+            label: "Bus 1",
+            priorityClass: "bus",
+            preferredRouteId: "edsa",
+            arrivalTick: 0,
+            serviceTicks: 3
+          },
+          {
+            id: "ambulance-1",
+            label: "Ambulance 1",
+            priorityClass: "emergency",
+            preferredRouteId: "edsa",
+            arrivalTick: 1,
+            serviceTicks: 1
+          }
+        ],
+        ticks: 3,
+        loadThreshold: 1
+      })
+    );
+
+    expect(result.timeline[1]).toMatchObject({
+      activeVehicleId: "ambulance-1",
+      activeRouteId: "edsa",
+      redirectedVehicleIds: []
+    });
+    expect(result.vehicles["ambulance-1"]).toMatchObject({
+      assignedRouteId: "edsa",
+      wasRedirected: false
+    });
   });
 
   it("tracks queue lengths and average wait by route on every tick", () => {

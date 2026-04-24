@@ -65,7 +65,7 @@ export const jeepneyRoutePath =
   "M492 56 C478 76 466 92 454 110 C442 136 434 154 428 168 C418 190 412 206 410 226 C408 240 410 252 420 258 C396 268 360 276 288 286";
 
 export const jeepneyRouteLayout: RouteStopLayout[] = [
-  { stopId: "prc-terminal", x: 492, y: 56, labelDx: 0, labelDy: -28 },
+  { stopId: "prc-terminal", x: 492, y: 56, labelDx: -28, labelDy: -34 },
   { stopId: "ap-reyes", x: 454, y: 110, labelDx: 68, labelDy: -2 },
   { stopId: "pablo-ocampo", x: 428, y: 168, labelDx: -94, labelDy: -10 },
   { stopId: "yakal", x: 410, y: 226, labelDx: 58, labelDy: -4 },

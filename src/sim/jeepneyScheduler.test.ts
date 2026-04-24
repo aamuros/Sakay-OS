@@ -95,10 +95,39 @@ describe("runJeepneySimulation", () => {
 
     expect(result.events[2]).toMatchObject({
       activeJeepneyId: "j3",
-      reason: "aging-boost",
+      reason: "quantum-expired",
       activeWaitTicks: 2
     });
-    expect(result.jeepneys.j3.agingBoosts).toBe(1);
+    expect(result.metrics[1].atRiskJeepneyIds).toEqual(["j3"]);
+    expect(result.jeepneys.j3.agingBoosts).toBe(0);
+  });
+
+  it("does not count aging when the front jeepney would dispatch normally", () => {
+    const result = runJeepneySimulation(
+      createConfig({
+        ticks: 3,
+        timeQuantum: 2,
+        agingEnabled: true,
+        agingThreshold: 1,
+        jeepneys: [
+          { id: "j1", label: "J1" },
+          { id: "j2", label: "J2" }
+        ]
+      })
+    );
+
+    expect(result.events.map((event) => event.activeJeepneyId)).toEqual([
+      "j1",
+      "j1",
+      "j2"
+    ]);
+    expect(result.events.map((event) => event.reason)).toEqual([
+      "dispatch",
+      "continue-quantum",
+      "quantum-expired"
+    ]);
+    expect(result.metrics[0].atRiskJeepneyIds).toEqual(["j2"]);
+    expect(result.jeepneys.j2.agingBoosts).toBe(0);
   });
 
   it("keeps FIFO order when multiple jeepneys tie for highest aging wait", () => {
@@ -196,7 +225,7 @@ describe("runJeepneySimulation", () => {
     ]);
   });
 
-  it("uses passenger arrival pressure to accelerate aging and backlog snapshots", () => {
+  it("uses passenger arrival pressure to accelerate wait risk and backlog snapshots", () => {
     const result = runJeepneySimulation(
       createConfig({
         ticks: 4,
@@ -215,7 +244,7 @@ describe("runJeepneySimulation", () => {
     });
     expect(result.events[1]).toMatchObject({
       activeJeepneyId: "j2",
-      reason: "aging-boost",
+      reason: "quantum-expired",
       didContextSwitch: true
     });
     expect(result.metrics[0]).toMatchObject({

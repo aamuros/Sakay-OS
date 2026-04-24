@@ -5,7 +5,7 @@ type ScenarioWorkspaceProps = {
 };
 
 function formatStageStatus(status: ScenarioDefinition["status"]) {
-  return status === "active" ? "Live demo" : "In progress";
+  return status === "active" ? "Active demo" : "In progress";
 }
 
 export function ScenarioWorkspace({ activeScenario }: ScenarioWorkspaceProps) {

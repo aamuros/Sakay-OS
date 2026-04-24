@@ -6,6 +6,7 @@ import { App } from "../App";
 import { scenarios } from "../scenarios/scenarios";
 
 const tickDurationMs = 900;
+const edsaTickDurationMs = 950;
 const reactActEnvironment = globalThis as typeof globalThis & {
   IS_REACT_ACT_ENVIRONMENT?: boolean;
 };
@@ -102,7 +103,7 @@ describe("ScenarioWorkspace", () => {
     reactActEnvironment.IS_REACT_ACT_ENVIRONMENT = false;
   });
 
-  it("keeps in-progress scenarios visible but disabled in the header switcher", async () => {
+  it("enables EDSA while keeping MRT disabled in the header switcher", async () => {
     reactActEnvironment.IS_REACT_ACT_ENVIRONMENT = true;
 
     const container = document.createElement("div");
@@ -116,22 +117,67 @@ describe("ScenarioWorkspace", () => {
     const edsaButton = getScenarioButton(container, "EDSA Overload");
     const mrtButton = getScenarioButton(container, "MRT Breakdown");
 
-    expect(edsaButton.disabled).toBe(true);
+    expect(edsaButton.disabled).toBe(false);
     expect(mrtButton.disabled).toBe(true);
-    expect(edsaButton.textContent).toContain("In Progress");
+    expect(edsaButton.textContent).toContain("Active");
     expect(mrtButton.textContent).toContain("In Progress");
 
     await act(async () => {
       edsaButton.click();
+    });
+
+    expect(
+      container.querySelector("#active-scenario")?.textContent?.trim()
+    ).toBe("EDSA Overload");
+    expect(container.textContent).toContain("Load balancing demo");
+    expect(container.textContent).toContain(
+      "EDSA fills first. Overflow moves to lighter routes."
+    );
+
+    await act(async () => {
       mrtButton.click();
     });
 
     expect(
       container.querySelector("#active-scenario")?.textContent?.trim()
-    ).toBe("Jeepney Bunching");
-    expect(container.textContent).toContain(
-      "Time-Sliced Scheduling with Starvation Prevention"
-    );
+    ).toBe("EDSA Overload");
+
+    await act(async () => {
+      root.unmount();
+    });
+
+    container.remove();
+    reactActEnvironment.IS_REACT_ACT_ENVIRONMENT = false;
+  });
+
+  it("renders the EDSA lesson around threshold pressure and redirects", async () => {
+    vi.useFakeTimers();
+    reactActEnvironment.IS_REACT_ACT_ENVIRONMENT = true;
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root: Root = createRoot(container);
+
+    await act(async () => {
+      root.render(<ScenarioWorkspace activeScenario={scenarios[1]} />);
+    });
+
+    expect(container.textContent).toContain("Load threshold");
+    expect(container.textContent).toContain("Rush-hour burst");
+    expect(container.textContent).toContain("Preemption On");
+    expect(container.textContent).toContain("Below threshold");
+    expect(container.textContent).toContain("Recent events");
+
+    await act(async () => {
+      getButton(container, "Start").click();
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(edsaTickDurationMs);
+    });
+
+    expect(container.textContent).toContain("after EDSA reached 2");
+    expect(container.textContent).toContain("Taking overflow");
 
     await act(async () => {
       root.unmount();
