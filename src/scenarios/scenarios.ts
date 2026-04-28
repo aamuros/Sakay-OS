@@ -30,8 +30,8 @@ export const scenarios: ScenarioDefinition[] = [
     concept: "Fault tolerance and process migration",
     algorithm: "Fault Tolerant Scheduling",
     description:
-      "Planned last because migration and recovery add the most complexity.",
-    status: "in-progress",
+      "Inject an MRT station failure, move passengers to backup routes, and watch degraded service recover.",
+    status: "active",
     Stage: MrtBreakdownStage
   }
 ];

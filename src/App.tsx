@@ -39,8 +39,8 @@ export function App() {
         <div className="app-header-meta">
           <span className="phase-badge">Class presentation mode</span>
           <p className="header-note">
-            Jeepney Bunching and EDSA Overload are active lessons. MRT
-            Breakdown remains a roadmap tab.
+            Jeepney Bunching, EDSA Overload, and MRT Breakdown are active
+            lessons.
           </p>
         </div>
 
